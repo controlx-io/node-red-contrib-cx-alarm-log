@@ -1,0 +1,23 @@
+node_version,0.1.0,required. It is version of the Alarm Logger node,
+version,1,optional. Version of the config.,
+---,,,
+eqName,tagName,alarm,event
+Shot Peener,main_run_request,,1:Shot Peener is Starting|0:Shot Peener is Stopping
+Shot Peener,elevators_running,I:1:Elevators ON,
+Shot Peener,rotation_running,I:1:Rotation ON,
+Shot Peener,K1_index_hpp_contactor_C,I:1:Index HPP ON,
+Shot Peener,blast_wheel_running,I:1:Blasting Wheel ON,
+Shot Peener,shot_supply_on,I:1:Shot Supply ON,
+Shot Peener,S12_shot_low_level_S,W:1:Shot Low Level Warning,
+Shot Peener,K13_dust_collector_valve_open_C,I:1:Dust Collector Valve Open,
+Shot Peener,elevators_healthy,F:0:Elevators Faulted,
+Shot Peener,rotation_healthy,F:0:Rotation System Faulted,
+Shot Peener,index_healthy,F:0:Index System Faulted,
+Shot Peener,blast_wheel_healthy,F:0:Blast Wheel System Faulted,
+Shot Peener,24V_supply_F,F:1:24V Supply Fault,
+Shot Peener,K600_safety_relay_F,F:1:Safety Relay (E-Stop) Fault,
+Shot Peener,TOL_circuit_F,F:1:Thermal Overloads Fault,
+Shot Peener,blocked_filter_F,F:1:Dust Collection Filter Blocked,
+Shot Peener,air_pressure_loss_F,F:1:Air Pressure Loss,
+Shot Peener,air_pressure,W:>10{pr_SP}:High Air Pressure Warning,40{air_pr_HiLim}:Air Pressure Limit,
+Shot Peener,machine_state,,2{index_sts}:Indexing|3{blast_sts}:Blasting

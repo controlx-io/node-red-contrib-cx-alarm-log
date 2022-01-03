@@ -1,0 +1,93 @@
+<script type="text/javascript">
+    RED.nodes.registerType("cx_alarm_log", {
+        category: "CX Nodes",
+        color: "#9fa0ff",
+        defaults: {
+            name: { value: "" },
+            alarmTopic: { value: "" },
+            eventTopic: { value: "" },
+            path: { require: true, validate: (value) => {return value.length > 0}},
+            isUpdatedConfig: { value: false },
+            isDebug: { value: false },
+        },
+        inputs: 1,
+        outputs: 3,
+        icon: "alert.png",
+        paletteLabel: "Alarm Logger",
+        label: function() {
+            return this.name || "Alarm Logger";
+        },
+    });
+</script>
+
+<script type="text/html" data-template-name="cx_alarm_log">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-alarmTopic">Alarm Topic</label>
+        <input type="text" id="node-input-alarmTopic" placeholder="alarms">
+    </div>
+    <div class="form-row">
+        <label for="node-input-eventTopic">Event Topic</label>
+        <input type="text" id="node-input-eventTopic" placeholder="events">
+    </div>
+    <div class="form-row">
+        <label for="node-input-path"> Config path</label>
+        <input type="text" id="node-input-path" placeholder="_config/alarm_config.csv">
+    </div>
+    <div class="form-row">
+        <label for="node-input-isUpdatedConfig"></label>
+        <input type="checkbox" id="node-input-isUpdatedConfig" style="display:inline-block; width:auto; vertical-align:baseline; margin-left:8px; margin-right:4px;">
+        <label for="node-input-isUpdatedConfig" style="width: 250px">  Toggle to parse the config again</label>
+    </div>
+    <div class="form-row">
+        <label for="node-input-isDebug"></label>
+        <input type="checkbox" id="node-input-isDebug" style="display:inline-block; width:auto; vertical-align:baseline; margin-left:8px; margin-right:4px;">
+        <label for="node-input-isDebug" style="width: 250px">  Debug</label>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="cx_alarm_log">
+    <p>Database Name is <code>events_db</code></p>
+    <p>Below is a copy from S7 Out Node</p>
+
+    <p>Writes to a memory area in a S7 PLC</p>
+    <p>This node was created as part of the <a href="https://st-one.io" target="_blank">ST-One</a> project</p>
+
+    <p class="form-tips">
+        <b>Caution when writing data to production PLCs!</b><br/>
+        Fully test everything you do. The authors cannot be liable for any
+        damage or injury caused by the use of this node
+    </p>
+
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>payload<span class="property-type">string | number | boolean | array</span></dt>
+        <dd>
+            the data to be written. It will be casted to the required data type
+            whenever possible.
+        </dd>
+
+        <dt>variable<span class="property-type">string | array</span></dt>
+        <dd>
+            the variable to write to on the PLC, according to the variable list
+            on the PLC endpoint. This takes effect <i>only</i> if the "Variable"
+            field is left empty on the configuration.
+        </dd>
+    </dl>
+
+    <h3>Details</h3>
+    <p>
+        Writes data to the PLC on the variable specified on the node configuration
+        or on <code>msg.variable</code>.
+    </p>
+    <p>
+        It is possible to write to multiple variables at once, by setting both
+        <code>msg.variable</code> and <code>msg.payload</code> to arrays containing
+        the variable names and their values, respectively. Note that they may not be
+        written in the same write cycle to the PLC, depending on the amount of variables
+        to be written.
+    </p>
+</script>

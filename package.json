@@ -1,0 +1,23 @@
+{
+  "name": "node-red-contrib-cx-alarm-log",
+  "version": "0.1.0",
+  "description": "A Node-RED industrial alarm parser for simple HMI applications.",
+  "keywords": [
+    "node-red",
+    "alarm", "industrial", "alarm log", "alarm logger", "hmi",
+    "cx", "controlx", "controlx.io"
+  ],
+  "node-red" : {
+    "version": ">=2.0.0",
+    "nodes": {
+      "alarm_log": "nodes/alarm_log.js"
+    }
+  },
+  "devDependencies": {
+    "@types/node-red": "^1.1.1",
+    "mocha": "^9.1.3",
+    "node-red": "^2.1.3",
+    "node-red-node-test-helper": "^0.2.7",
+    "should": "^13.2.3"
+  }
+}
