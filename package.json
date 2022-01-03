@@ -19,5 +19,13 @@
     "node-red": "^2.1.3",
     "node-red-node-test-helper": "^0.2.7",
     "should": "^13.2.3"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/controlx-io/node-red-contrib-cx-alarm-log.git"
+  },
+  "bugs": {
+    "url": "https://github.com/controlx-io/node-red-contrib-cx-alarm-log/issues"
+  },
+  "homepage": "https://github.com/controlx-io/node-red-contrib-cx-alarm-log#readme"
 }
