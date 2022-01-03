@@ -16,7 +16,11 @@ Node outputs:
   2. Added events
   3. Current settings
 
-## Node Usage Screenshots
+## Node Usage
+An example of its usage [https://node-red-dev.controlx.io:5010/](https://node-red-dev.controlx.io:5010/)
+with [admin here](https://node-red-dev.controlx.io:5010/admin/)
+
+### Screenshots
 Flow Usage:
 ![flow usage example](./tests/flow_usage.png)
 
