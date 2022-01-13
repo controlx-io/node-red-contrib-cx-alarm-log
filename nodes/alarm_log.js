@@ -28,6 +28,7 @@ module.exports = function (RED) {
         let eventConfigs = [];
         RED.nodes.createNode(this, config);
         const node = this;
+        activeAlarms[node.id] = { F: {}, I: {}, W: {} };
         const logger = new tools_1.Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new tools_1.EventConfig(logger);
         if (config.path && typeof config.path === "string") {

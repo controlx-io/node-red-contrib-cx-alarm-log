@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-cx-alarm-log",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A Node-RED industrial alarm parser for simple HMI applications.",
   "keywords": [
     "node-red",

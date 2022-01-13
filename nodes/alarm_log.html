@@ -50,44 +50,28 @@
 </script>
 
 <script type="text/html" data-help-name="cx_alarm_log">
-    <p>Database Name is <code>events_db</code></p>
-    <p>Below is a copy from S7 Out Node</p>
-
-    <p>Writes to a memory area in a S7 PLC</p>
-    <p>This node was created as part of the <a href="https://st-one.io" target="_blank">ST-One</a> project</p>
-
-    <p class="form-tips">
-        <b>Caution when writing data to production PLCs!</b><br/>
-        Fully test everything you do. The authors cannot be liable for any
-        damage or injury caused by the use of this node
-    </p>
+    <p>Not completed yet. Work in Progress</p>
 
     <h3>Inputs</h3>
     <dl class="message-properties">
-        <dt>payload<span class="property-type">string | number | boolean | array</span></dt>
+        <dt>payload<span class="property-type">object</span></dt>
         <dd>
-            the data to be written. It will be casted to the required data type
-            whenever possible.
+            Key is the tag name. The value is the tag value.
+        </dd>
+    </dl>
+
+
+    <h3>Output 1/2</h3>
+    <dl class="message-properties">
+        <dt>payload<span class="property-type">object</span></dt>
+        <dd>
+            toUpdate or toAdd
         </dd>
 
-        <dt>variable<span class="property-type">string | array</span></dt>
-        <dd>
-            the variable to write to on the PLC, according to the variable list
-            on the PLC endpoint. This takes effect <i>only</i> if the "Variable"
-            field is left empty on the configuration.
-        </dd>
     </dl>
 
     <h3>Details</h3>
     <p>
-        Writes data to the PLC on the variable specified on the node configuration
-        or on <code>msg.variable</code>.
-    </p>
-    <p>
-        It is possible to write to multiple variables at once, by setting both
-        <code>msg.variable</code> and <code>msg.payload</code> to arrays containing
-        the variable names and their values, respectively. Note that they may not be
-        written in the same write cycle to the PLC, depending on the amount of variables
-        to be written.
+        TODO.
     </p>
 </script>

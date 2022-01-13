@@ -33,6 +33,7 @@ module.exports = function(RED: NodeRedApp) {
         // @ts-ignore
         RED.nodes.createNode(this, config);
         const node: Node = this;
+        activeAlarms[node.id] = {F: {}, I: {}, W: {}};
 
         const logger = new Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new EventConfig(logger);
