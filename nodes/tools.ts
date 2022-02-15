@@ -120,9 +120,10 @@ export class EventConfig {
     }
 
 
-    parseConfig(fullFilename: string) {
+    parseConfig(fullFilename: string, text? : string, sep?: string) {
 
-        const text = EventConfig.readCsvFile(fullFilename);
+        text =  text || EventConfig.readCsvFile(fullFilename);
+        sep = sep || ",";
         const logger = this.logger;
         const setpoints = this.setpoints;
 
@@ -136,7 +137,7 @@ export class EventConfig {
         const node = {
             quo: '"',
             hdrin: true,  // header
-            sep: ',',
+            sep,
         };
 
         const lines = text.split(/\r?\n/);

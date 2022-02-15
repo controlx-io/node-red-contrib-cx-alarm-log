@@ -9,6 +9,8 @@
             path: { require: true, validate: (value) => {return value.length > 0}},
             isUpdatedConfig: { value: false },
             isDebug: { value: false },
+            configText: {value: ""},
+            isTabSeparator: {value: false},
         },
         inputs: 1,
         outputs: 3,
@@ -17,36 +19,91 @@
         label: function() {
             return this.name || "Alarm Logger";
         },
+        oneditprepare: function() {
+
+            // Prepare tabs
+            const tabs = RED.tabs.create({
+                id: "node-input-cx-alarm-log-tabs",
+                onchange: function (tab) {
+                    $("#node-config-cx-alarm-log-tabs-content").children().hide();
+                    $("#" + tab.id).show();
+                }
+            });
+            tabs.addTab({
+                id: "cx-alarm-log-tab-general",
+                label: "General"
+            });
+            tabs.addTab({
+                id: "cx-alarm-log-tab-config",
+                label: "Config"
+            });
+
+            setTimeout(function () {
+                tabs.resize()
+            }, 0);
+
+            this.editor = RED.editor.createEditor({
+                id: 'cx-alarm-log-config',
+                mode: 'ace/mode/text',
+                value: this.configText || ""
+            });
+        },
+        oneditsave: function() {
+            this.configText = this.editor.getValue();
+            this.editor.destroy();
+            delete this.editor;
+        },
+        oneditcancel: function() {
+            this.editor.destroy();
+            delete this.editor;
+        },
     });
 </script>
 
 <script type="text/html" data-template-name="cx_alarm_log">
     <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-input-name" placeholder="Name">
+        <ul style="background: #fff; min-width: 600px; margin-bottom: 20px;" id="node-input-cx-alarm-log-tabs"></ul>
     </div>
-    <div class="form-row">
-        <label for="node-input-alarmTopic">Alarm Topic</label>
-        <input type="text" id="node-input-alarmTopic" placeholder="alarms">
+    <div id="node-config-cx-alarm-log-tabs-content" style="min-height: 170px;">
+        <div id="cx-alarm-log-tab-general" style="display:none">
+            <div class="form-row">
+                <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+                <input type="text" id="node-input-name" placeholder="Name">
+            </div>
+            <div class="form-row">
+                <label for="node-input-alarmTopic">Alarm Topic</label>
+                <input type="text" id="node-input-alarmTopic" placeholder="alarms">
+            </div>
+            <div class="form-row">
+                <label for="node-input-eventTopic">Event Topic</label>
+                <input type="text" id="node-input-eventTopic" placeholder="events">
+            </div>
+            <div class="form-row">
+                <label for="node-input-path"> Config path</label>
+                <input type="text" id="node-input-path" placeholder="_config/alarm_config.csv">
+            </div>
+            <div class="form-row">
+                <label for="node-input-isUpdatedConfig"></label>
+                <input type="checkbox" id="node-input-isUpdatedConfig" style="display:inline-block; width:auto; vertical-align:baseline; margin-left:8px; margin-right:4px;">
+                <label for="node-input-isUpdatedConfig" style="width: 250px">  Toggle to parse the config again</label>
+            </div>
+            <div class="form-row">
+                <label for="node-input-isDebug"></label>
+                <input type="checkbox" id="node-input-isDebug" style="display:inline-block; width:auto; vertical-align:baseline; margin-left:8px; margin-right:4px;">
+                <label for="node-input-isDebug" style="width: 250px">  Debug</label>
+            </div>
+        </div>
+        <div id="cx-alarm-log-tab-config" style="display:none">
+            <div style="height: 450px; min-height:150px;" class="node-text-editor" id="cx-alarm-log-config"></div>
+            <div class="form-row"></div>
+            <div class="form-row">
+                <label for="node-input-isTabSeparator"></label>
+                <input type="checkbox" id="node-input-isTabSeparator" style="display:inline-block; width:auto; vertical-align:baseline; margin-left:8px; margin-right:4px;">
+                <label for="node-input-isTabSeparator" style="width: 250px">  Tab Separator</label>
+            </div>
+        </div>
     </div>
-    <div class="form-row">
-        <label for="node-input-eventTopic">Event Topic</label>
-        <input type="text" id="node-input-eventTopic" placeholder="events">
-    </div>
-    <div class="form-row">
-        <label for="node-input-path"> Config path</label>
-        <input type="text" id="node-input-path" placeholder="_config/alarm_config.csv">
-    </div>
-    <div class="form-row">
-        <label for="node-input-isUpdatedConfig"></label>
-        <input type="checkbox" id="node-input-isUpdatedConfig" style="display:inline-block; width:auto; vertical-align:baseline; margin-left:8px; margin-right:4px;">
-        <label for="node-input-isUpdatedConfig" style="width: 250px">  Toggle to parse the config again</label>
-    </div>
-    <div class="form-row">
-        <label for="node-input-isDebug"></label>
-        <input type="checkbox" id="node-input-isDebug" style="display:inline-block; width:auto; vertical-align:baseline; margin-left:8px; margin-right:4px;">
-        <label for="node-input-isDebug" style="width: 250px">  Debug</label>
-    </div>
+
 </script>
 
 <script type="text/html" data-help-name="cx_alarm_log">

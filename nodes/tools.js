@@ -69,8 +69,9 @@ class EventConfig {
             return "";
         }
     }
-    parseConfig(fullFilename) {
-        const text = EventConfig.readCsvFile(fullFilename);
+    parseConfig(fullFilename, text, sep) {
+        text = text || EventConfig.readCsvFile(fullFilename);
+        sep = sep || ",";
         const logger = this.logger;
         const setpoints = this.setpoints;
         const configHeader = {
@@ -82,7 +83,7 @@ class EventConfig {
         const node = {
             quo: '"',
             hdrin: true,
-            sep: ',',
+            sep,
         };
         const lines = text.split(/\r?\n/);
         let isMeta = true;

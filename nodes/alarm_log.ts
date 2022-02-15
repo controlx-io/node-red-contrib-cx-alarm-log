@@ -18,7 +18,9 @@ interface IConfig {
     eventTopic?: string,
     isMochaTesting?: boolean,
     isDebug?: boolean,
-    isUpdatedConfig?: boolean
+    isUpdatedConfig?: boolean,
+    configText?: string,
+    isTabSeparator: boolean,
 }
 
 
@@ -38,8 +40,20 @@ module.exports = function(RED: NodeRedApp) {
         const logger = new Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new EventConfig(logger);
 
-        // ==== Setup Config ===
-        if (config.path && typeof config.path === "string") {
+
+        if (config.configText) {
+            try {
+                const sep = config.isTabSeparator ? "\t" : ",";
+
+                const conf = eventConfig.parseConfig("", config.configText, sep);
+                eventConfigs = conf.body;
+                logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'" } ` +
+                    `is set with ${eventConfigs.length} config tags.`);
+            } catch (e) {
+                logger.error(e);
+            }
+
+        } else if (config.path && typeof config.path === "string") {
             try {
                 // @ts-ignore
                 const fileWorkingDirectory = config.isMochaTesting ? __dirname : RED.settings.fileWorkingDirectory;
@@ -52,7 +66,8 @@ module.exports = function(RED: NodeRedApp) {
                 const conf = eventConfig.parseConfig(fullFilename);
                 eventConfigs = conf.body;
 
-                logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'" } is set.`);
+                logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'" } ` +
+                    `is set with ${eventConfigs.length} config tags.`);
             } catch (e) {
                 logger.error(e);
             }

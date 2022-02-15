@@ -31,7 +31,19 @@ module.exports = function (RED) {
         activeAlarms[node.id] = { F: {}, I: {}, W: {} };
         const logger = new tools_1.Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new tools_1.EventConfig(logger);
-        if (config.path && typeof config.path === "string") {
+        if (config.configText) {
+            try {
+                const sep = config.isTabSeparator ? "\t" : ",";
+                const conf = eventConfig.parseConfig("", config.configText, sep);
+                eventConfigs = conf.body;
+                logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'"} ` +
+                    `is set with ${eventConfigs.length} config tags.`);
+            }
+            catch (e) {
+                logger.error(e);
+            }
+        }
+        else if (config.path && typeof config.path === "string") {
             try {
                 const fileWorkingDirectory = config.isMochaTesting ? __dirname : RED.settings.fileWorkingDirectory;
                 let fullFilename = config.path;
@@ -40,7 +52,8 @@ module.exports = function (RED) {
                 }
                 const conf = eventConfig.parseConfig(fullFilename);
                 eventConfigs = conf.body;
-                logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'"} is set.`);
+                logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'"} ` +
+                    `is set with ${eventConfigs.length} config tags.`);
             }
             catch (e) {
                 logger.error(e);
