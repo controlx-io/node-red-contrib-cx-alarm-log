@@ -91,7 +91,7 @@ module.exports = function(RED: NodeRedApp) {
 
             const newValues = filterNewValues(plcTagValuesState, msg.payload);
             if (!newValues) return;
-            plcTagValuesState[node.id] = {...plcTagValuesState, ...newValues};
+            plcTagValuesState[node.id] = {...plcTagValuesState[node.id], ...newValues};
 
             const alarmsOut = {
                 toAdd: [] as IEventRecord[],
