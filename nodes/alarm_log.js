@@ -1,7 +1,11 @@
 "use strict";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
-    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
 }) : (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     o[k2] = m[k];
@@ -29,6 +33,19 @@ module.exports = function (RED) {
         RED.nodes.createNode(this, config);
         const node = this;
         activeAlarms[node.id] = { F: {}, I: {}, W: {} };
+        let saveActiveAlarmsFn;
+        let ctxStorage;
+        if (config.storage) {
+            const contextKey = RED.util.parseContextStore(config.storage);
+            ctxStorage = node.context()[config.storageType].get(contextKey.key, contextKey.store);
+            saveActiveAlarmsFn = () => {
+                node.context()[config.storageType].set(contextKey.key, activeAlarms[node.id], contextKey.store);
+            };
+            if (ctxStorage)
+                activeAlarms[node.id] = ctxStorage;
+            else
+                saveActiveAlarmsFn();
+        }
         const logger = new tools_1.Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new tools_1.EventConfig(logger);
         if (config.configText) {
@@ -73,7 +90,7 @@ module.exports = function (RED) {
             const newValues = (0, tools_1.filterNewValues)(plcTagValuesState, msg.payload);
             if (!newValues)
                 return;
-            plcTagValuesState[node.id] = Object.assign(Object.assign({}, plcTagValuesState), newValues);
+            plcTagValuesState[node.id] = Object.assign(Object.assign({}, plcTagValuesState[node.id]), newValues);
             const alarmsOut = {
                 toAdd: [],
                 toUpdate: []

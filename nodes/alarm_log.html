@@ -6,11 +6,16 @@
             name: { value: "" },
             alarmTopic: { value: "" },
             eventTopic: { value: "" },
-            path: { require: true, validate: (value) => {return value.length > 0}},
+            path: { value: "" },
             isUpdatedConfig: { value: false },
             isDebug: { value: false },
-            configText: {value: ""},
-            isTabSeparator: {value: false},
+            configText: { value: "" },
+            isTabSeparator: { value: false },
+            storage: {
+                value: "events_db",
+                validate: RED.validators.typedInput("storageType", false)
+            },
+            storageType: { value: "global" },
         },
         inputs: 1,
         outputs: 3,
@@ -19,7 +24,10 @@
         label: function() {
             return this.name || "Alarm Logger";
         },
+        outputLabels: ["Alarms", "Events", "Config"],
         oneditprepare: function() {
+
+            $("#node-input-storage").typedInput({default: this.storageType || 'global', types: ['flow','global']});
 
             // Prepare tabs
             const tabs = RED.tabs.create({
@@ -52,6 +60,8 @@
             this.configText = this.editor.getValue();
             this.editor.destroy();
             delete this.editor;
+
+            this.storageType = $("#node-input-storage").typedInput('type');
         },
         oneditcancel: function() {
             this.editor.destroy();
@@ -81,6 +91,10 @@
             <div class="form-row">
                 <label for="node-input-path"> Config path</label>
                 <input type="text" id="node-input-path" placeholder="_config/alarm_config.csv">
+            </div>
+            <div class="form-row">
+                <label for="node-input-storage"><i class="fa fa-database"></i> Storage</label>
+                <input type="text" id="node-input-storage" placeholder="keep empty to disable"/>
             </div>
             <div class="form-row">
                 <label for="node-input-isUpdatedConfig"></label>

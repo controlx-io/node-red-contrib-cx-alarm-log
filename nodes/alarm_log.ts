@@ -21,6 +21,9 @@ interface IConfig {
     isUpdatedConfig?: boolean,
     configText?: string,
     isTabSeparator: boolean,
+
+    storage?: string,
+    storageType: "global" | "flow",
 }
 
 
@@ -36,6 +39,21 @@ module.exports = function(RED: NodeRedApp) {
         RED.nodes.createNode(this, config);
         const node: Node = this;
         activeAlarms[node.id] = {F: {}, I: {}, W: {}};
+        let saveActiveAlarmsFn: () => void;
+
+        let ctxStorage: undefined | IActiveAlarmsRegister;
+        if (config.storage) {
+            const contextKey = RED.util.parseContextStore(config.storage);
+            ctxStorage = (node.context()[config.storageType].get(contextKey.key, contextKey.store) as
+                undefined | IActiveAlarmsRegister);
+
+            saveActiveAlarmsFn = () => {
+                node.context()[config.storageType].set(contextKey.key, activeAlarms[node.id], contextKey.store);
+            };
+
+            if (ctxStorage) activeAlarms[node.id] = ctxStorage;
+            else saveActiveAlarmsFn();
+        }
 
         const logger = new Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new EventConfig(logger);
@@ -91,7 +109,7 @@ module.exports = function(RED: NodeRedApp) {
 
             const newValues = filterNewValues(plcTagValuesState, msg.payload);
             if (!newValues) return;
-            plcTagValuesState[node.id] = {...plcTagValuesState, ...newValues};
+            plcTagValuesState[node.id] = {...plcTagValuesState[node.id], ...newValues};
 
             const alarmsOut = {
                 toAdd: [] as IEventRecord[],
