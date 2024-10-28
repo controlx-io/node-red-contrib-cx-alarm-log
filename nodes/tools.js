@@ -243,7 +243,7 @@ class EventConfig {
                 return tagValue > alarmParam.onTrigger.val;
         }
     }
-    validateConfig(payload) {
+    static validateConfig(payload) {
         if (typeof payload.tagName !== 'string' ||
             typeof payload.eqName !== 'string' ||
             !Array.isArray(payload.alarmParams) ||
@@ -265,6 +265,9 @@ class EventConfig {
         }
         return (payload.alarmParams.every(validateEventTriggerParam) &&
             payload.eventParams.every(validateEventTriggerParam));
+    }
+    static getEventId(tagName, type, index) {
+        return tagName + "::" + type + "::" + index;
     }
 }
 exports.EventConfig = EventConfig;

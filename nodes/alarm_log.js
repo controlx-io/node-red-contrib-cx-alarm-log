@@ -30,7 +30,8 @@ module.exports = function (RED) {
     const activeAlarms = {};
     function AlarmLogNode(config) {
         let eventConfigs = [];
-        const eventEnabledMap = {};
+        const disabledEventMap = {};
+        const unacknowledgedEventMap = {};
         RED.nodes.createNode(this, config);
         const node = this;
         activeAlarms[node.id] = { F: {}, I: {}, W: {} };
@@ -41,9 +42,6 @@ module.exports = function (RED) {
                 const sep = config.isTabSeparator ? "\t" : ",";
                 const conf = eventConfig.parseConfig("", config.configText, sep);
                 eventConfigs = conf.body;
-                for (const eventConfig of eventConfigs) {
-                    eventEnabledMap[eventConfig.tagName] = true;
-                }
                 logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'"} ` +
                     `is set with ${eventConfigs.length} config tags.`);
             }
@@ -79,7 +77,7 @@ module.exports = function (RED) {
                 for (const tag of msg.tags) {
                     const { group, name, value } = tag;
                     const key = group + "__" + name;
-                    if (group && name && value != null && eventEnabledMap[key]) {
+                    if (group && name && value != null && !disabledEventMap[key]) {
                         payload[key] = value;
                     }
                 }
@@ -101,6 +99,8 @@ module.exports = function (RED) {
                 toAdd: []
             };
             for (const [tagName, newValue] of Object.entries(newValues)) {
+                if (disabledEventMap[tagName])
+                    continue;
                 const val = typeof newValue === "boolean" ?
                     (newValue ? 1 : 0) :
                     newValue;
@@ -109,8 +109,20 @@ module.exports = function (RED) {
                 const eventConfig = eventConfigs.find(event => event.tagName === tagName);
                 if (!eventConfig)
                     continue;
-                alarmChecker(eventConfig, tagName, val, alarmsOut, true);
-                alarmChecker(eventConfig, tagName, val, eventsOut, false);
+                alarmChecker(eventConfig, val, alarmsOut, true);
+                alarmChecker(eventConfig, val, eventsOut, false);
+            }
+            sendNodeREDMsg(alarmsOut, eventsOut);
+        });
+        function sendNodeREDMsg(alarmsOut, eventsOut) {
+            const eventsToNotify = [];
+            if (alarmsOut.toAdd.length || eventsOut.toAdd.length) {
+                for (const record of alarmsOut.toAdd.concat(eventsOut.toAdd)) {
+                    if (unacknowledgedEventMap[record.tagName])
+                        continue;
+                    eventsToNotify.push(record);
+                    unacknowledgedEventMap[record.tagName] = true;
+                }
             }
             if (alarmsOut.toUpdate.length || alarmsOut.toAdd.length || eventsOut.toAdd.length) {
                 const alarmMsg = (alarmsOut.toUpdate.length || alarmsOut.toAdd.length) ?
@@ -119,10 +131,11 @@ module.exports = function (RED) {
                     { payload: eventsOut, topic: config.eventTopic } : null;
                 const alarmsCountMsg = alarmMsg ?
                     { payload: countActiveAlarms(), topic: "__active_alarms_count__" } : null;
-                node.send([alarmMsg, eventMsg, alarmsCountMsg]);
+                node.send([alarmMsg, eventMsg, alarmsCountMsg, { payload: eventsToNotify }]);
             }
-        });
-        function alarmChecker(eventConfig, tagName, val, result, isAlarm) {
+        }
+        function alarmChecker(eventConfig, val, result, isAlarm) {
+            const tagName = eventConfig.tagName;
             const { eqName, alarmParams, eventParams } = eventConfig;
             const configParam = isAlarm ? alarmParams : eventParams;
             const ts = Date.now();
@@ -130,7 +143,7 @@ module.exports = function (RED) {
                 const event = {
                     ts, eqName, tagName,
                     triggerCond: Object.assign({}, eventParam.onTrigger),
-                    eventId: tagName + "::" + eventParam.type + "::" + i,
+                    eventId: tools_1.EventConfig.getEventId(tagName, eventParam.type, i),
                     isActive: false,
                     type: eventParam.type,
                     desc: eventParam.desc
@@ -160,6 +173,32 @@ module.exports = function (RED) {
                         result.toAdd.push(event);
                 }
             }
+        }
+        function clearAlarm(eventConfig) {
+            const events = [];
+            if (!eventConfig)
+                return events;
+            const tagName = eventConfig.tagName;
+            const { eqName, alarmParams } = eventConfig;
+            const configParam = alarmParams;
+            const ts = Date.now();
+            for (const [i, eventParam] of configParam.entries()) {
+                const event = {
+                    ts, eqName, tagName,
+                    triggerCond: Object.assign({}, eventParam.onTrigger),
+                    eventId: tools_1.EventConfig.getEventId(tagName, eventParam.type, i),
+                    isActive: false,
+                    type: eventParam.type,
+                    desc: eventParam.desc
+                };
+                const type = event.type;
+                const isActive = activeAlarms[node.id][type][event.eventId];
+                if (!isActive)
+                    return;
+                delete activeAlarms[node.id][type][event.eventId];
+                events.push(event);
+            }
+            return events;
         }
         function countActiveAlarms() {
             const out = {};
@@ -224,10 +263,10 @@ module.exports = function (RED) {
                 }
                 return true;
             }
-            if (msg.topic === "__add_tag_config") {
+            if (msg.topic === "__add_tag_config__") {
                 const configArr = Array.isArray(msg.payload) ? msg.payload : [msg.payload];
                 for (const config of configArr) {
-                    if (!eventConfig.validateConfig(config)) {
+                    if (!tools_1.EventConfig.validateConfig(config)) {
                         logger.warn(new Error("Config is invalid: " + JSON.stringify(config)));
                         continue;
                     }
@@ -237,8 +276,30 @@ module.exports = function (RED) {
                     }
                     else {
                         eventConfigs.push(config);
-                        eventEnabledMap[config.tagName] = true;
                     }
+                }
+                return true;
+            }
+            if (msg.topic === "__manage_event__") {
+                if (typeof msg.payload !== "object")
+                    return false;
+                for (const [tagName, value] of Object.entries(msg.payload)) {
+                    if (value) {
+                        delete disabledEventMap[tagName];
+                    }
+                    else {
+                        disabledEventMap[tagName] = true;
+                        const alarmsToUpdate = clearAlarm(eventConfigs.find(event => event.tagName === tagName));
+                        sendNodeREDMsg({ toAdd: [], toUpdate: alarmsToUpdate }, { toAdd: [] });
+                    }
+                }
+                return true;
+            }
+            if (msg.topic === "__acknowledge_event__") {
+                const ackEvents = Array.isArray(msg.payload) ? msg.payload : [msg.payload];
+                for (const event of ackEvents) {
+                    if (unacknowledgedEventMap[event])
+                        delete unacknowledgedEventMap[event];
                 }
                 return true;
             }
@@ -260,6 +321,8 @@ module.exports = function (RED) {
             if (msg.topic === "__get_setpoints__") {
                 node.send([null, null, { payload: eventConfig.setpoints, topic: msg.topic }]);
                 return true;
+            }
+            if (msg.topic === "__get_alarms__") {
             }
             return false;
         }

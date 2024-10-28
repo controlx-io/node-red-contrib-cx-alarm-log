@@ -1,4 +1,4 @@
-import {Node} from "node-red";
+import { Node } from "node-red";
 import fs from "fs";
 
 export const EVENT_TYPES = ["E"] as const;
@@ -13,8 +13,10 @@ export interface ITriggerConfig {
     sp?: string
 }
 
+export type EventTypeEnum = "E" | "I" | "W" | "F";
+
 export interface IEventTriggerParam {
-    type: "I" | "W" | "F" | "E",
+    type: EventTypeEnum,
     onTrigger: ITriggerConfig,
     desc: string
 }
@@ -58,13 +60,12 @@ export function isObject(val: any): boolean {
     return val.constructor.name === "Object" && typeof val === "object"
 }
 
-export function filterNewValues(oldObject: {[key: string]: any}, newObject: {[key: string]: any}):
-    {[key: string]: string | number | boolean} | undefined
-{
+export function filterNewValues(oldObject: { [key: string]: any }, newObject: { [key: string]: any }):
+    { [key: string]: string | number | boolean } | undefined {
     const newKeys = Object.keys(newObject);
     if (!newKeys) return;
 
-    const newValues: {[key: string]: any} = {};
+    const newValues: { [key: string]: any } = {};
 
     for (const key of newKeys) {
         if (isPrimitive(newObject[key]) && oldObject[key] !== newObject[key]) {
@@ -81,14 +82,14 @@ export class Logger {
         if (this.isDebug) console.log("Debug is ON for node:", node.name || node.id);
     }
 
-    debug(...args : any[]) {
+    debug(...args: any[]) {
         if (this.isDebug) {
             const message = [args].map(v => v.toString()).join(" ");
             this.node.warn(message)
         }
     }
 
-    warn(...args : any[]) {
+    warn(...args: any[]) {
         if (this.isDebug) console.log(...args);
         const message = [args].map(v => v.toString()).join(" ");
         this.node.warn(message)
@@ -101,9 +102,10 @@ export class Logger {
 }
 
 export class EventConfig {
-    public setpoints: {[key: string]: ITriggerConfig} = {};
+    public setpoints: { [key: string]: ITriggerConfig } = {};
 
-    constructor(private logger: Logger) {}
+    constructor(private logger: Logger) {
+    }
 
 
     static readCsvFile(fullFilename: string): string {
@@ -120,9 +122,9 @@ export class EventConfig {
     }
 
 
-    parseConfig(fullFilename: string, text? : string, sep?: string) {
+    parseConfig(fullFilename: string, text?: string, sep?: string) {
 
-        text =  text || EventConfig.readCsvFile(fullFilename);
+        text = text || EventConfig.readCsvFile(fullFilename);
         sep = sep || ",";
         const logger = this.logger;
         const setpoints = this.setpoints;
@@ -145,7 +147,7 @@ export class EventConfig {
         let isHeader = false;
 
         const out = {
-            meta: {} as {[key: string]: string},
+            meta: {} as { [key: string]: string },
             headers: [] as string[],
             body: [] as IEventConfig[],
         }
@@ -190,14 +192,14 @@ export class EventConfig {
             for (let i = 0; i < line.length; i++) {
                 if (line[i] === node.quo) { // if it's a quote toggle inside or outside
                     isOutsideQuotes = !isOutsideQuotes;
-                    if (line[i-1] === node.quo) {
+                    if (line[i - 1] === node.quo) {
                         if (!isOutsideQuotes === false) k[j] += '\"';
                     } // if it's a quotequote then it's actually a quote
 
                 } else if ((line[i] === node.sep && isOutsideQuotes) || i === line.length - 1) { // if it is the end of the line then finish
                     if (header[j] && header[j] !== "") {
                         // if no value between separators ('1,,"3"...') or if the line beings with separator (',1,"2"...') treat value as null
-                        if (line[i-1] === node.sep) k[j] = "";
+                        if (line[i - 1] === node.sep) k[j] = "";
 
                         if (header[j] === configHeader.tagName && !k[j]) return;
 
@@ -226,10 +228,10 @@ export class EventConfig {
         }
 
         function clean(col: string) {
-            const re = new RegExp(node.sep.replace(/[-[\]{}()*+!<=:?.\/\\^$|#\s,]/g,'\\$&') +
-                '(?=(?:(?:[^"]*"){2})*[^"]*$)','g');
+            const re = new RegExp(node.sep.replace(/[-[\]{}()*+!<=:?.\/\\^$|#\s,]/g, '\\$&') +
+                '(?=(?:(?:[^"]*"){2})*[^"]*$)', 'g');
             let arr = col.trim().split(re) || [""];
-            arr = arr.map(x => x.replace(/"/g,"").trim());
+            arr = arr.map(x => x.replace(/"/g, "").trim());
             return arr;
         }
 
@@ -274,7 +276,7 @@ export class EventConfig {
     }
 
     static parseTriggerStr(param: string, isEvent?: boolean): ITriggerConfig {
-        const out: ITriggerConfig = {op: "?", val: 0};
+        const out: ITriggerConfig = { op: "?", val: 0 };
 
         const spTest = param.match(/{([^}]+)}/);
         if (spTest) {
@@ -331,7 +333,7 @@ export class EventConfig {
      * Check if a payload is a valid IEventConfig
      * @param payload
      */
-    validateConfig(payload: any): payload is IEventConfig {
+    static validateConfig(payload: any): payload is IEventConfig {
         // Check top-level properties for IEventConfig
         if (
             typeof payload.tagName !== 'string' ||
@@ -370,4 +372,7 @@ export class EventConfig {
         );
     }
 
+    static getEventId(tagName: string, type: EventTypeEnum, index: number) {
+        return tagName + "::" + type + "::" + index
+    }
 }
