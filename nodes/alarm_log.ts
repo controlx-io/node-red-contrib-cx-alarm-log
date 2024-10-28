@@ -31,6 +31,7 @@ module.exports = function (RED: NodeRedApp) {
 
     function AlarmLogNode(config: IConfig) {
         let eventConfigs: IEventConfig[] = [];
+        const eventEnabledMap: { [key: string]: boolean } = {};
 
         // @ts-ignore
         RED.nodes.createNode(this, config);
@@ -47,6 +48,9 @@ module.exports = function (RED: NodeRedApp) {
 
                 const conf = eventConfig.parseConfig("", config.configText, sep);
                 eventConfigs = conf.body;
+                for (const eventConfig of eventConfigs) {
+                    eventEnabledMap[eventConfig.tagName] = true;
+                }
                 logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'"} ` +
                     `is set with ${eventConfigs.length} config tags.`);
             } catch (e) {
@@ -83,7 +87,18 @@ module.exports = function (RED: NodeRedApp) {
             if (!Object.keys(eventConfigs).length)
                 return logger.error(new Error("Event config is empty."));
 
-            if (!isObject(msg.payload)) {
+            // If tags property is defined, and it is an array, convert it to an object and use this object as payload
+            if (msg.tags && Array.isArray(msg.tags)) {
+                const payload: { [key: string]: any } = {};
+                for (const tag of msg.tags) {
+                    const { group, name, value } = tag;
+                    const key = group + "__" + name
+                    if (group && name && value != null && eventEnabledMap[key]) {
+                        payload[key] = value;
+                    }
+                }
+                msg.payload = payload;
+            } else if (!isObject(msg.payload)) {
                 const errMsg = "Incorrect Payload data type: " + JSON.stringify(msg.payload);
                 return logger.error(new Error(errMsg));
             }
@@ -280,6 +295,7 @@ module.exports = function (RED: NodeRedApp) {
                     } else {
                         // else add the tag to the eventConfigs
                         eventConfigs.push(config);
+                        eventEnabledMap[config.tagName] = true;
                     }
                 }
                 return true;
