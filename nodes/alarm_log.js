@@ -322,8 +322,6 @@ module.exports = function (RED) {
                 node.send([null, null, { payload: eventConfig.setpoints, topic: msg.topic }]);
                 return true;
             }
-            if (msg.topic === "__get_alarms__") {
-            }
             return false;
         }
     }

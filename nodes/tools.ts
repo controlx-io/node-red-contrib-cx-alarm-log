@@ -13,10 +13,8 @@ export interface ITriggerConfig {
     sp?: string
 }
 
-export type EventTypeEnum = "E" | "I" | "W" | "F";
-
 export interface IEventTriggerParam {
-    type: EventTypeEnum,
+    type: EventType | AlarmType,
     onTrigger: ITriggerConfig,
     desc: string
 }
@@ -372,7 +370,7 @@ export class EventConfig {
         );
     }
 
-    static getEventId(tagName: string, type: EventTypeEnum, index: number) {
+    static getEventId(tagName: string, type: AlarmType | EventType, index: number) {
         return tagName + "::" + type + "::" + index
     }
 }
