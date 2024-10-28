@@ -210,17 +210,21 @@ module.exports = function (RED) {
                 return true;
             }
             if (msg.topic === "__add_tag_config") {
-                if (!eventConfig.validateConfig(msg.payload)) {
-                    logger.error(new Error("Config is invalid: " + JSON.stringify(msg.payload)));
-                    return true;
+                const configArr = Array.isArray(msg.payload) ? msg.payload : [msg.payload];
+                for (const config of configArr) {
+                    if (!eventConfig.validateConfig(config)) {
+                        logger.warn(new Error("Config is invalid: " + JSON.stringify(config)));
+                        continue;
+                    }
+                    const existingTag = eventConfigs.find(event => event.tagName === config.tagName);
+                    if (existingTag) {
+                        Object.assign(existingTag, config);
+                    }
+                    else {
+                        eventConfigs.push(config);
+                    }
                 }
-                const existingTag = eventConfigs.find(event => event.tagName === msg.payload.tagName);
-                if (existingTag) {
-                    Object.assign(existingTag, msg.payload);
-                }
-                else {
-                    eventConfigs.push(msg.payload);
-                }
+                return true;
             }
             return false;
         }

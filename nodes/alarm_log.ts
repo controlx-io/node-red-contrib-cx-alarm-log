@@ -265,20 +265,24 @@ module.exports = function (RED: NodeRedApp) {
             }
 
             if (msg.topic === "__add_tag_config") {
-                // validate the payload
-                if (!eventConfig.validateConfig(msg.payload)) {
-                    logger.error(new Error("Config is invalid: " + JSON.stringify(msg.payload)));
-                    return true;
-                }
+                const configArr = Array.isArray(msg.payload) ? msg.payload : [msg.payload];
+                for (const config of configArr) {
+                    // validate the payload
+                    if (!eventConfig.validateConfig(config)) {
+                        logger.warn(new Error("Config is invalid: " + JSON.stringify(config)));
+                        continue;
+                    }
 
-                // if eventConfigs already has the tag, update it
-                const existingTag = eventConfigs.find(event => event.tagName === msg.payload.tagName);
-                if (existingTag) {
-                    Object.assign(existingTag, msg.payload);
-                } else {
-                    // else add the tag to the eventConfigs
-                    eventConfigs.push(msg.payload);
+                    // if eventConfigs already has the tag, update it
+                    const existingTag = eventConfigs.find(event => event.tagName === config.tagName);
+                    if (existingTag) {
+                        Object.assign(existingTag, config);
+                    } else {
+                        // else add the tag to the eventConfigs
+                        eventConfigs.push(config);
+                    }
                 }
+                return true;
             }
 
             return false;
