@@ -243,6 +243,29 @@ class EventConfig {
                 return tagValue > alarmParam.onTrigger.val;
         }
     }
+    validateConfig(payload) {
+        if (typeof payload.tagName !== 'string' ||
+            typeof payload.eqName !== 'string' ||
+            !Array.isArray(payload.alarmParams) ||
+            !Array.isArray(payload.eventParams)) {
+            return false;
+        }
+        function validateTriggerConfig(triggerConfig) {
+            const validOps = ['=', '>', '<', '#', '?'];
+            return (typeof triggerConfig.op === 'string' &&
+                validOps.includes(triggerConfig.op) &&
+                typeof triggerConfig.val === 'number' &&
+                (typeof triggerConfig.sp === 'undefined' || typeof triggerConfig.sp === 'string'));
+        }
+        function validateEventTriggerParam(param) {
+            const validTypes = ['I', 'W', 'F', 'E'];
+            return (typeof param.desc === 'string' &&
+                validTypes.includes(param.type) &&
+                validateTriggerConfig(param.onTrigger));
+        }
+        return (payload.alarmParams.every(validateEventTriggerParam) &&
+            payload.eventParams.every(validateEventTriggerParam));
+    }
 }
 exports.EventConfig = EventConfig;
 //# sourceMappingURL=tools.js.map

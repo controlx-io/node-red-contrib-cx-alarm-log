@@ -326,4 +326,48 @@ export class EventConfig {
                 return tagValue > alarmParam.onTrigger.val;
         }
     }
+
+    /**
+     * Check if a payload is a valid IEventConfig
+     * @param payload
+     */
+    validateConfig(payload: any): payload is IEventConfig {
+        // Check top-level properties for IEventConfig
+        if (
+            typeof payload.tagName !== 'string' ||
+            typeof payload.eqName !== 'string' ||
+            !Array.isArray(payload.alarmParams) ||
+            !Array.isArray(payload.eventParams)
+        ) {
+            return false;
+        }
+
+        // Helper to validate ITriggerConfig
+        function validateTriggerConfig(triggerConfig: any): triggerConfig is ITriggerConfig {
+            const validOps = ['=', '>', '<', '#', '?'];
+            return (
+                typeof triggerConfig.op === 'string' &&
+                validOps.includes(triggerConfig.op) &&
+                typeof triggerConfig.val === 'number' &&
+                (typeof triggerConfig.sp === 'undefined' || typeof triggerConfig.sp === 'string')
+            );
+        }
+
+        // Helper to validate IEventTriggerParam
+        function validateEventTriggerParam(param: any): param is IEventTriggerParam {
+            const validTypes = ['I', 'W', 'F', 'E'];
+            return (
+                typeof param.desc === 'string' &&
+                validTypes.includes(param.type) &&
+                validateTriggerConfig(param.onTrigger)
+            );
+        }
+
+        // Validate each alarmParam and eventParam
+        return (
+            payload.alarmParams.every(validateEventTriggerParam) &&
+            payload.eventParams.every(validateEventTriggerParam)
+        );
+    }
+
 }

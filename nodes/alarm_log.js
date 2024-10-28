@@ -209,6 +209,19 @@ module.exports = function (RED) {
                 }
                 return true;
             }
+            if (msg.topic === "__add_tag_config") {
+                if (!eventConfig.validateConfig(msg.payload)) {
+                    logger.error(new Error("Config is invalid: " + JSON.stringify(msg.payload)));
+                    return true;
+                }
+                const existingTag = eventConfigs.find(event => event.tagName === msg.payload.tagName);
+                if (existingTag) {
+                    Object.assign(existingTag, msg.payload);
+                }
+                else {
+                    eventConfigs.push(msg.payload);
+                }
+            }
             return false;
         }
         function checkTopicAndSend(msg) {

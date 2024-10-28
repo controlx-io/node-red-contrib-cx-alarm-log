@@ -1,4 +1,4 @@
-import {Node, NodeRedApp} from "node-red";
+import { Node, NodeRedApp } from "node-red";
 import {
     ALARM_TYPES,
     AlarmType,
@@ -12,7 +12,7 @@ import {
 import * as path from "path";
 
 interface IConfig {
-    plcTagValuesState: {[key:string]: any},
+    plcTagValuesState: { [key: string]: any },
     path: string,
     alarmTopic?: string,
     eventTopic?: string,
@@ -24,9 +24,9 @@ interface IConfig {
 }
 
 
-module.exports = function(RED: NodeRedApp) {
-    const plcTagValuesState: {[nodeId: string]: any} = {};
-    const activeAlarms: {[nodeId: string]: IActiveAlarmsRegister} = {};
+module.exports = function (RED: NodeRedApp) {
+    const plcTagValuesState: { [nodeId: string]: any } = {};
+    const activeAlarms: { [nodeId: string]: IActiveAlarmsRegister } = {};
 
 
     function AlarmLogNode(config: IConfig) {
@@ -35,7 +35,7 @@ module.exports = function(RED: NodeRedApp) {
         // @ts-ignore
         RED.nodes.createNode(this, config);
         const node: Node = this;
-        activeAlarms[node.id] = {F: {}, I: {}, W: {}};
+        activeAlarms[node.id] = { F: {}, I: {}, W: {} };
 
         const logger = new Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new EventConfig(logger);
@@ -47,7 +47,7 @@ module.exports = function(RED: NodeRedApp) {
 
                 const conf = eventConfig.parseConfig("", config.configText, sep);
                 eventConfigs = conf.body;
-                logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'" } ` +
+                logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'"} ` +
                     `is set with ${eventConfigs.length} config tags.`);
             } catch (e) {
                 logger.error(e);
@@ -66,7 +66,7 @@ module.exports = function(RED: NodeRedApp) {
                 const conf = eventConfig.parseConfig(fullFilename);
                 eventConfigs = conf.body;
 
-                logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'" } ` +
+                logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'"} ` +
                     `is set with ${eventConfigs.length} config tags.`);
             } catch (e) {
                 logger.error(e);
@@ -91,7 +91,7 @@ module.exports = function(RED: NodeRedApp) {
 
             const newValues = filterNewValues(plcTagValuesState, msg.payload);
             if (!newValues) return;
-            plcTagValuesState[node.id] = {...plcTagValuesState[node.id], ...newValues};
+            plcTagValuesState[node.id] = { ...plcTagValuesState[node.id], ...newValues };
 
             const alarmsOut = {
                 toAdd: [] as IEventRecord[],
@@ -104,7 +104,7 @@ module.exports = function(RED: NodeRedApp) {
 
             for (const [tagName, newValue] of Object.entries(newValues)) {
                 const val = typeof newValue === "boolean" ?
-                    (newValue ? 1 : 0):
+                    (newValue ? 1 : 0) :
                     newValue;
 
                 if (typeof val !== "number" || !Number.isFinite(val)) continue;
@@ -120,23 +120,22 @@ module.exports = function(RED: NodeRedApp) {
 
             if (alarmsOut.toUpdate.length || alarmsOut.toAdd.length || eventsOut.toAdd.length) {
                 const alarmMsg = (alarmsOut.toUpdate.length || alarmsOut.toAdd.length) ?
-                    {payload: alarmsOut, topic: config.alarmTopic} : null;
+                    { payload: alarmsOut, topic: config.alarmTopic } : null;
 
                 const eventMsg = (eventsOut.toAdd.length) ?
-                    {payload: eventsOut, topic: config.eventTopic} : null;
+                    { payload: eventsOut, topic: config.eventTopic } : null;
 
                 const alarmsCountMsg = alarmMsg ?
-                    {payload: countActiveAlarms(), topic: "__active_alarms_count__"} : null;
+                    { payload: countActiveAlarms(), topic: "__active_alarms_count__" } : null;
 
                 node.send([alarmMsg, eventMsg, alarmsCountMsg]);
             }
         });
 
 
-        function alarmChecker(eventConfig : IEventConfig, tagName: string, val: number,
-                              result: {toAdd: IEventRecord[], toUpdate?: IEventRecord[]}, isAlarm: boolean)
-        {
-            const {eqName, alarmParams, eventParams} = eventConfig;
+        function alarmChecker(eventConfig: IEventConfig, tagName: string, val: number,
+                              result: { toAdd: IEventRecord[], toUpdate?: IEventRecord[] }, isAlarm: boolean) {
+            const { eqName, alarmParams, eventParams } = eventConfig;
 
             const configParam = isAlarm ? alarmParams : eventParams;
             const ts = Date.now();
@@ -144,7 +143,7 @@ module.exports = function(RED: NodeRedApp) {
             for (const [i, eventParam] of configParam.entries()) {
                 const event: IEventRecord = {
                     ts, eqName, tagName,
-                    triggerCond: {...eventParam.onTrigger},
+                    triggerCond: { ...eventParam.onTrigger },
                     eventId: tagName + "::" + eventParam.type + "::" + i,
                     isActive: false,
                     type: eventParam.type,
@@ -156,7 +155,7 @@ module.exports = function(RED: NodeRedApp) {
 
                 if (isAlarm) {
                     const type = event.type as AlarmType;
-                    const isActive =  activeAlarms[node.id][type][event.eventId];
+                    const isActive = activeAlarms[node.id][type][event.eventId];
 
                     // if NOT triggered and NOT in active buffer
                     if (isTriggered === false && !isActive) return;
@@ -187,7 +186,7 @@ module.exports = function(RED: NodeRedApp) {
          * returns example {F:2, I:1, W:2}
          */
         function countActiveAlarms() {
-            const out: {[key: string]: number} = {};
+            const out: { [key: string]: number } = {};
             for (const key of Object.keys(activeAlarms[node.id])) {
                 out[key] = Object.keys(activeAlarms[node.id][(key as AlarmType)]).length
             }
@@ -206,7 +205,7 @@ module.exports = function(RED: NodeRedApp) {
                     logger.error(new Error("Payload must be an array, got " + JSON.stringify(msg.payload)));
                     return true;
                 }
-                activeAlarms[node.id] = {F: {}, I: {}, W: {}};
+                activeAlarms[node.id] = { F: {}, I: {}, W: {} };
 
                 for (const activeAlarm of msg.payload) {
                     if (!activeAlarm.isActive) continue;
@@ -265,6 +264,22 @@ module.exports = function(RED: NodeRedApp) {
                 return true;
             }
 
+            if (msg.topic === "__add_tag_config") {
+                // validate the payload
+                if (!eventConfig.validateConfig(msg.payload)) {
+                    logger.error(new Error("Config is invalid: " + JSON.stringify(msg.payload)));
+                    return true;
+                }
+
+                // if eventConfigs already has the tag, update it
+                const existingTag = eventConfigs.find(event => event.tagName === msg.payload.tagName);
+                if (existingTag) {
+                    Object.assign(existingTag, msg.payload);
+                } else {
+                    // else add the tag to the eventConfigs
+                    eventConfigs.push(msg.payload);
+                }
+            }
 
             return false;
         }
@@ -272,23 +287,23 @@ module.exports = function(RED: NodeRedApp) {
         function checkTopicAndSend(msg: any): boolean {
 
             if (msg.topic === "__get_remembered_values__") {
-                node.send([null, null, {payload: plcTagValuesState, topic: msg.topic}]);
+                node.send([null, null, { payload: plcTagValuesState, topic: msg.topic }]);
                 return true;
             }
 
 
             if (msg.topic === "__get_config__") {
-                node.send([null, null, {payload: eventConfigs, topic: msg.topic}]);
+                node.send([null, null, { payload: eventConfigs, topic: msg.topic }]);
                 return true;
             }
 
             if (msg.topic === "__get_active_alarms__") {
-                node.send([null, null, {payload: activeAlarms[node.id], topic: msg.topic}]);
+                node.send([null, null, { payload: activeAlarms[node.id], topic: msg.topic }]);
                 return true;
             }
 
             if (msg.topic === "__get_setpoints__") {
-                node.send([null, null, {payload: eventConfig.setpoints, topic: msg.topic}]);
+                node.send([null, null, { payload: eventConfig.setpoints, topic: msg.topic }]);
                 return true;
             }
 
@@ -296,6 +311,7 @@ module.exports = function(RED: NodeRedApp) {
         }
 
     }
+
     // @ts-ignore
     RED.nodes.registerType("cx_alarm_log", AlarmLogNode);
 }
