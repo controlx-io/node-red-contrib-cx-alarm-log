@@ -178,7 +178,7 @@ module.exports = function (RED: NodeRedApp) {
                     eventId: EventConfig.getEventId(tagName, eventParam.type, i),
                     isActive: false,
                     type: eventParam.type,
-                    desc: eventParam.desc
+                    description: eventParam.desc
                 };
 
                 const isTriggered = EventConfig.isAlarmTriggered(val, eventParam);
@@ -229,7 +229,7 @@ module.exports = function (RED: NodeRedApp) {
                     eventId: EventConfig.getEventId(tagName, eventParam.type, i),
                     isActive: false,
                     type: eventParam.type,
-                    desc: eventParam.desc
+                    description: eventParam.desc
                 };
 
                 const type = event.type as AlarmType;

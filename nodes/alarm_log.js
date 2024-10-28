@@ -146,7 +146,7 @@ module.exports = function (RED) {
                     eventId: tools_1.EventConfig.getEventId(tagName, eventParam.type, i),
                     isActive: false,
                     type: eventParam.type,
-                    desc: eventParam.desc
+                    description: eventParam.desc
                 };
                 const isTriggered = tools_1.EventConfig.isAlarmTriggered(val, eventParam);
                 if (isTriggered == null)
@@ -189,7 +189,7 @@ module.exports = function (RED) {
                     eventId: tools_1.EventConfig.getEventId(tagName, eventParam.type, i),
                     isActive: false,
                     type: eventParam.type,
-                    desc: eventParam.desc
+                    description: eventParam.desc
                 };
                 const type = event.type;
                 const isActive = activeAlarms[node.id][type][event.eventId];

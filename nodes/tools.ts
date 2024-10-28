@@ -34,7 +34,7 @@ export interface IEventRecord {
     type: EventType | AlarmType,
     isActive: boolean,
     triggerCond: ITriggerConfig,
-    desc: string,
+    description: string,
 }
 
 export interface IActiveAlarmsRegister {
