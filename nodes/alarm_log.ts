@@ -11,6 +11,7 @@ import {
     Logger
 } from "./tools";
 import * as path from "path";
+import SqliteHelper from "./sqlite_helper";
 
 interface IConfig {
     plcTagValuesState: { [key: string]: any },
@@ -27,7 +28,9 @@ interface IConfig {
 
 module.exports = function (RED: NodeRedApp) {
     const plcTagValuesState: { [nodeId: string]: any } = {};
+    // todo update this from database when process is started.
     const activeAlarms: { [nodeId: string]: IActiveAlarmsRegister } = {};
+    const sqliteHelper = new SqliteHelper('./alarmNode.sqlite');
 
 
     function AlarmLogNode(config: IConfig) {
@@ -100,7 +103,6 @@ module.exports = function (RED: NodeRedApp) {
                 return logger.error(new Error(errMsg));
             }
 
-
             const newValues = filterNewValues(plcTagValuesState, msg.payload);
             if (!newValues) return;
             plcTagValuesState[node.id] = { ...plcTagValuesState[node.id], ...newValues };
@@ -132,7 +134,8 @@ module.exports = function (RED: NodeRedApp) {
 
             sendNodeREDMsg(alarmsOut, eventsOut);
 
-            // todo update / insert records in database, alarmsOut: {toUpdate: [], toAdd: []}, eventsOut: {toAdd: []}
+            sqliteHelper.addAndUpdateEvent(alarmsOut);
+            sqliteHelper.addAndUpdateEvent(eventsOut);
         });
 
         function sendNodeREDMsg(alarmsOut: {
@@ -368,7 +371,7 @@ module.exports = function (RED: NodeRedApp) {
                         clearAlarm(eventConfig, alarmsOut);
                     }
                 }
-                // todo update database with alarmsOut
+                sqliteHelper.addAndUpdateEvent(alarmsOut);
 
                 // send NodeRED msg
                 sendNodeREDMsg(alarmsOut, { toAdd: [] });

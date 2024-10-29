@@ -22,12 +22,17 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const tools_1 = require("./tools");
 const path = __importStar(require("path"));
+const sqlite_helper_1 = __importDefault(require("./sqlite_helper"));
 module.exports = function (RED) {
     const plcTagValuesState = {};
     const activeAlarms = {};
+    const sqliteHelper = new sqlite_helper_1.default('./alarmNode.sqlite');
     function AlarmLogNode(config) {
         let eventConfigs = [];
         const disabledEventMap = {};
@@ -113,6 +118,8 @@ module.exports = function (RED) {
                 alarmChecker(eventConfig, val, eventsOut, false);
             }
             sendNodeREDMsg(alarmsOut, eventsOut);
+            sqliteHelper.addAndUpdateEvent(alarmsOut);
+            sqliteHelper.addAndUpdateEvent(eventsOut);
         });
         function sendNodeREDMsg(alarmsOut, eventsOut) {
             const eventsToNotify = [];
@@ -300,6 +307,7 @@ module.exports = function (RED) {
                         clearAlarm(eventConfig, alarmsOut);
                     }
                 }
+                sqliteHelper.addAndUpdateEvent(alarmsOut);
                 sendNodeREDMsg(alarmsOut, { toAdd: [] });
                 return true;
             }
