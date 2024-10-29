@@ -2,11 +2,12 @@ import { Node, NodeRedApp } from "node-red";
 import {
     ALARM_TYPES,
     AlarmType,
-    EventConfig, EventType,
+    EventConfig,
     filterNewValues,
     IActiveAlarmsRegister,
-    IEventConfig, IEventRecord,
-    isObject, ITriggerConfig,
+    IEventConfig,
+    IEventRecord,
+    isObject,
     Logger
 } from "./tools";
 import * as path from "path";
@@ -213,9 +214,7 @@ module.exports = function (RED: NodeRedApp) {
             }
         }
 
-        function clearAlarm(eventConfig: IEventConfig) {
-            const events: IEventRecord[] = [];
-            if (!eventConfig) return events;
+        function clearAlarm(eventConfig: IEventConfig, result: { toAdd: IEventRecord[], toUpdate?: IEventRecord[] }) {
             const tagName = eventConfig.tagName;
             const { eqName, alarmParams } = eventConfig;
 
@@ -239,9 +238,8 @@ module.exports = function (RED: NodeRedApp) {
                 if (!isActive) return;
 
                 delete activeAlarms[node.id][type][event.eventId];
-                events.push(event);
+                result.toUpdate.push(event);
             }
-            return events;
         }
 
         /**
@@ -348,17 +346,32 @@ module.exports = function (RED: NodeRedApp) {
 
             if (msg.topic === "__manage_event__") {
                 if (typeof msg.payload !== "object") return false;
-                for (const [tagName, value] of Object.entries(msg.payload)) {
-                    if (value) {
+                const alarmsOut = {
+                    toAdd: [] as IEventRecord[],
+                    toUpdate: [] as IEventRecord[]
+                };
+
+                for (const [tagName, enable] of Object.entries(msg.payload)) {
+                    let val = plcTagValuesState[node.id][tagName];
+                    val = typeof val === "boolean" ? (val ? 1 : 0) : val;
+                    if (typeof val !== "number" || !Number.isFinite(val)) continue;
+
+                    const eventConfig = eventConfigs.find(event => event.tagName === tagName);
+                    if (!eventConfig) continue;
+
+                    if (enable) {
                         delete disabledEventMap[tagName];
+                        alarmChecker(eventConfig, val, alarmsOut, true);
                     } else {
                         disabledEventMap[tagName] = true;
                         // clear the existing alarm
-                        const alarmsToUpdate = clearAlarm(eventConfigs.find(event => event.tagName === tagName));
-                        sendNodeREDMsg({ toAdd: [], toUpdate: alarmsToUpdate }, { toAdd: [] });
-                        // todo update database
+                        clearAlarm(eventConfig, alarmsOut);
                     }
                 }
+                // todo update database with alarmsOut
+
+                // send NodeRED msg
+                sendNodeREDMsg(alarmsOut, { toAdd: [] });
                 return true;
             }
 

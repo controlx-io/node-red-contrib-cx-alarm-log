@@ -174,10 +174,7 @@ module.exports = function (RED) {
                 }
             }
         }
-        function clearAlarm(eventConfig) {
-            const events = [];
-            if (!eventConfig)
-                return events;
+        function clearAlarm(eventConfig, result) {
             const tagName = eventConfig.tagName;
             const { eqName, alarmParams } = eventConfig;
             const configParam = alarmParams;
@@ -196,9 +193,8 @@ module.exports = function (RED) {
                 if (!isActive)
                     return;
                 delete activeAlarms[node.id][type][event.eventId];
-                events.push(event);
+                result.toUpdate.push(event);
             }
-            return events;
         }
         function countActiveAlarms() {
             const out = {};
@@ -283,16 +279,28 @@ module.exports = function (RED) {
             if (msg.topic === "__manage_event__") {
                 if (typeof msg.payload !== "object")
                     return false;
-                for (const [tagName, value] of Object.entries(msg.payload)) {
-                    if (value) {
+                const alarmsOut = {
+                    toAdd: [],
+                    toUpdate: []
+                };
+                for (const [tagName, enable] of Object.entries(msg.payload)) {
+                    let val = plcTagValuesState[node.id][tagName];
+                    val = typeof val === "boolean" ? (val ? 1 : 0) : val;
+                    if (typeof val !== "number" || !Number.isFinite(val))
+                        continue;
+                    const eventConfig = eventConfigs.find(event => event.tagName === tagName);
+                    if (!eventConfig)
+                        continue;
+                    if (enable) {
                         delete disabledEventMap[tagName];
+                        alarmChecker(eventConfig, val, alarmsOut, true);
                     }
                     else {
                         disabledEventMap[tagName] = true;
-                        const alarmsToUpdate = clearAlarm(eventConfigs.find(event => event.tagName === tagName));
-                        sendNodeREDMsg({ toAdd: [], toUpdate: alarmsToUpdate }, { toAdd: [] });
+                        clearAlarm(eventConfig, alarmsOut);
                     }
                 }
+                sendNodeREDMsg(alarmsOut, { toAdd: [] });
                 return true;
             }
             if (msg.topic === "__acknowledge_event__") {
