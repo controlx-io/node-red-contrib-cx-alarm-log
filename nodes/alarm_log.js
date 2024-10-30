@@ -32,14 +32,28 @@ const sqlite_helper_1 = __importDefault(require("./sqlite_helper"));
 module.exports = function (RED) {
     const plcTagValuesState = {};
     const activeAlarms = {};
-    const sqliteHelper = new sqlite_helper_1.default('./alarmNode.sqlite');
+    function getActiveAlarms(sqliteHelper) {
+        const alarms = sqliteHelper.fetchAllActiveEvents();
+        const map = {
+            "I": {},
+            "W": {},
+            "F": {},
+        };
+        for (const alarm of alarms) {
+            if (alarm.type === 'E')
+                continue;
+            map[alarm.type][alarm.eventId] = true;
+        }
+        return map;
+    }
     function AlarmLogNode(config) {
         let eventConfigs = [];
         const disabledEventMap = {};
         const unacknowledgedEventMap = {};
         RED.nodes.createNode(this, config);
         const node = this;
-        activeAlarms[node.id] = { F: {}, I: {}, W: {} };
+        const sqliteHelper = new sqlite_helper_1.default(`./alarmNode_${node.id}.sqlite`);
+        activeAlarms[node.id] = getActiveAlarms(sqliteHelper);
         const logger = new tools_1.Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new tools_1.EventConfig(logger);
         if (config.configText) {
@@ -82,7 +96,7 @@ module.exports = function (RED) {
                 for (const tag of msg.tags) {
                     const { group, name, value } = tag;
                     const key = group + "__" + name;
-                    if (group && name && value != null && !disabledEventMap[key]) {
+                    if (group && name && value != null) {
                         payload[key] = value;
                     }
                 }
@@ -117,9 +131,9 @@ module.exports = function (RED) {
                 alarmChecker(eventConfig, val, alarmsOut, true);
                 alarmChecker(eventConfig, val, eventsOut, false);
             }
-            sendNodeREDMsg(alarmsOut, eventsOut);
             sqliteHelper.addAndUpdateEvent(alarmsOut);
             sqliteHelper.addAndUpdateEvent(eventsOut);
+            sendNodeREDMsg(alarmsOut, eventsOut);
         });
         function sendNodeREDMsg(alarmsOut, eventsOut) {
             const eventsToNotify = [];
@@ -138,7 +152,11 @@ module.exports = function (RED) {
                     { payload: eventsOut, topic: config.eventTopic } : null;
                 const alarmsCountMsg = alarmMsg ?
                     { payload: countActiveAlarms(), topic: "__active_alarms_count__" } : null;
-                node.send([alarmMsg, eventMsg, alarmsCountMsg, { payload: eventsToNotify }]);
+                const allEventMsg = {
+                    payload: sqliteHelper.fetchAllEvents(),
+                    topic: "__get_all_events__"
+                };
+                node.send([alarmMsg, eventMsg, allEventMsg, { payload: eventsToNotify }]);
             }
         }
         function alarmChecker(eventConfig, val, result, isAlarm) {
@@ -319,6 +337,12 @@ module.exports = function (RED) {
                 }
                 return true;
             }
+            if (msg.topic === "__clear_all_active_alarms__") {
+                activeAlarms[node.id] = { F: {}, I: {}, W: {} };
+                sqliteHelper.clearAllActiveAlarms();
+                node.send([null, null, { payload: activeAlarms[node.id], topic: "__get_all_events__" }]);
+                return true;
+            }
             return false;
         }
         function checkTopicAndSend(msg) {
@@ -336,6 +360,10 @@ module.exports = function (RED) {
             }
             if (msg.topic === "__get_setpoints__") {
                 node.send([null, null, { payload: eventConfig.setpoints, topic: msg.topic }]);
+                return true;
+            }
+            if (msg.topic === "__get_all_events__") {
+                node.send([null, null, { payload: sqliteHelper.fetchAllEvents(), topic: msg.topic }]);
                 return true;
             }
             return false;

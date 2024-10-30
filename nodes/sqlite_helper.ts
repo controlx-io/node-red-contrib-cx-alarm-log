@@ -117,26 +117,32 @@ export default class SqliteHelper {
 
     /**
      * Fetches all active or inactive events.
-     * @param isActive - Boolean to filter by active status.
      * @returns Array of matching event records.
      */
-    fetchAllEvents(isActive: boolean): IEventSqlRecord[] {
+    fetchAllActiveEvents(): IEventSqlRecord[] {
         const stmt = this.prepare(`SELECT *
-                                   FROM events`);
+                                   FROM events
+                                   where isActive = 1`);
         return stmt.all() as IEventSqlRecord[];
     }
 
+    /**
+     * Fetches all events.
+     * @returns Array of matching event records.
+     */
+    fetchAllEvents(): IEventSqlRecord[] {
+        const stmt = this.prepare(`SELECT *
+                                   FROM events`);
+
+        const result = stmt.all() as IEventSqlRecord[];
+
+        for (const event of result) {
+            event.triggerCond = JSON.parse(event.triggerCond);
+        }
+        return result as IEventSqlRecord[];
+    }
+
     addAndUpdateEvent(out: { toAdd: IEventRecord[], toUpdate?: IEventRecord[] }) {
-        // if  (!this.db.open) {
-        //     for (const event of out.toAdd) {
-        //         this.toAdd.push(event);
-        //     }
-        //     for (const event of out.toUpdate) {
-        //         this.toUpdate.push(event);
-        //     }
-        // }
-
-
         for (const event of out.toAdd) {
             this.insertEvent(event);
         }
@@ -148,5 +154,10 @@ export default class SqliteHelper {
         for (const event of out.toUpdate) {
             this.deactivateEvent(event);
         }
+    }
+
+    clearAllActiveAlarms() {
+        const stmt = this.prepare(`UPDATE events set isActive = 0`);
+        stmt.run();
     }
 }

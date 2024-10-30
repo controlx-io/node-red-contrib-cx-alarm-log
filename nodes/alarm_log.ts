@@ -27,21 +27,37 @@ interface IConfig {
 
 
 module.exports = function (RED: NodeRedApp) {
-    const plcTagValuesState: { [nodeId: string]: any } = {};
-    // todo update this from database when process is started.
-    const activeAlarms: { [nodeId: string]: IActiveAlarmsRegister } = {};
-    const sqliteHelper = new SqliteHelper('./alarmNode.sqlite');
 
+    const plcTagValuesState: { [nodeId: string]: any } = {};
+
+    const activeAlarms: { [nodeId: string]: IActiveAlarmsRegister } = {};
+
+    function getActiveAlarms(sqliteHelper: SqliteHelper) {
+        const alarms = sqliteHelper.fetchAllActiveEvents();
+
+        const map: IActiveAlarmsRegister = {
+            "I": {},
+            "W": {},
+            "F": {},
+        }
+
+        for (const alarm of alarms) {
+            if (alarm.type === 'E') continue;
+            map[alarm.type][alarm.eventId] = true;
+        }
+        return map;
+    }
 
     function AlarmLogNode(config: IConfig) {
         let eventConfigs: IEventConfig[] = [];
         const disabledEventMap: { [key: string]: boolean } = {};
-        const unacknowledgedEventMap: { [key: string]: boolean } = {}; //
+        const unacknowledgedEventMap: { [key: string]: boolean } = {};
 
         // @ts-ignore
         RED.nodes.createNode(this, config);
         const node: Node = this;
-        activeAlarms[node.id] = { F: {}, I: {}, W: {} };
+        const sqliteHelper = new SqliteHelper(`./alarmNode_${node.id}.sqlite`);
+        activeAlarms[node.id] = getActiveAlarms(sqliteHelper);
 
         const logger = new Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new EventConfig(logger);
@@ -93,7 +109,7 @@ module.exports = function (RED: NodeRedApp) {
                 for (const tag of msg.tags) {
                     const { group, name, value } = tag;
                     const key = group + "__" + name
-                    if (group && name && value != null && !disabledEventMap[key]) {
+                    if (group && name && value != null) {
                         payload[key] = value;
                     }
                 }
@@ -132,10 +148,10 @@ module.exports = function (RED: NodeRedApp) {
                 alarmChecker(eventConfig, val, eventsOut, false);
             }
 
-            sendNodeREDMsg(alarmsOut, eventsOut);
-
             sqliteHelper.addAndUpdateEvent(alarmsOut);
             sqliteHelper.addAndUpdateEvent(eventsOut);
+
+            sendNodeREDMsg(alarmsOut, eventsOut);
         });
 
         function sendNodeREDMsg(alarmsOut: {
@@ -163,7 +179,11 @@ module.exports = function (RED: NodeRedApp) {
                 const alarmsCountMsg = alarmMsg ?
                     { payload: countActiveAlarms(), topic: "__active_alarms_count__" } : null;
 
-                node.send([alarmMsg, eventMsg, alarmsCountMsg, { payload: eventsToNotify }]);
+                const allEventMsg = {
+                    payload: sqliteHelper.fetchAllEvents(),
+                    topic: "__get_all_events__"
+                }
+                node.send([alarmMsg, eventMsg, allEventMsg, { payload: eventsToNotify }]);
             }
         }
 
@@ -217,7 +237,10 @@ module.exports = function (RED: NodeRedApp) {
             }
         }
 
-        function clearAlarm(eventConfig: IEventConfig, result: { toAdd: IEventRecord[], toUpdate?: IEventRecord[] }) {
+        function clearAlarm(eventConfig: IEventConfig, result: {
+            toAdd: IEventRecord[],
+            toUpdate?: IEventRecord[]
+        }) {
             const tagName = eventConfig.tagName;
             const { eqName, alarmParams } = eventConfig;
 
@@ -386,6 +409,13 @@ module.exports = function (RED: NodeRedApp) {
                 return true;
             }
 
+            if (msg.topic === "__clear_all_active_alarms__") {
+                activeAlarms[node.id] = { F: {}, I: {}, W: {} };
+                sqliteHelper.clearAllActiveAlarms();
+                node.send([null, null, { payload: activeAlarms[node.id], topic: "__get_all_events__" }]);
+                return true;
+            }
+
             return false;
         }
 
@@ -409,6 +439,11 @@ module.exports = function (RED: NodeRedApp) {
 
             if (msg.topic === "__get_setpoints__") {
                 node.send([null, null, { payload: eventConfig.setpoints, topic: msg.topic }]);
+                return true;
+            }
+
+            if (msg.topic === "__get_all_events__") {
+                node.send([null, null, { payload: sqliteHelper.fetchAllEvents(), topic: msg.topic }]);
                 return true;
             }
 
