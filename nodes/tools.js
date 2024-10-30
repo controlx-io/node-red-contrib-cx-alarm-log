@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EventConfig = exports.Logger = exports.filterNewValues = exports.isObject = exports.isPrimitive = exports.ALARM_TYPES = exports.EVENT_TYPES = void 0;
+exports.EventConfig = exports.Logger = exports.flattenTags = exports.filterNewValues = exports.isObject = exports.isPrimitive = exports.ALARM_TYPES = exports.EVENT_TYPES = void 0;
 const fs_1 = __importDefault(require("fs"));
 exports.EVENT_TYPES = ["E"];
 exports.ALARM_TYPES = ["I", "W", "F"];
@@ -28,6 +28,18 @@ function filterNewValues(oldObject, newObject) {
     return newValues;
 }
 exports.filterNewValues = filterNewValues;
+function flattenTags(tags) {
+    const payload = {};
+    for (const tag of tags) {
+        const { group, name, value } = tag;
+        const key = group + "__" + name;
+        if (group && name && value != null) {
+            payload[key] = value;
+        }
+    }
+    return payload;
+}
+exports.flattenTags = flattenTags;
 class Logger {
     constructor(node, isDebug) {
         this.node = node;

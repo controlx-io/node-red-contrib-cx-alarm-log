@@ -16,17 +16,19 @@ export interface IEventSqlRecord {
 
 export default class SqliteHelper {
     private db: sqlite3.Database;
-    private toAdd: IEventRecord[] = [];
-    private toUpdate: IEventRecord[] = [];
 
-    constructor(dbPath: string) {
+    constructor(dbPath: string, private tableSuffix: string) {
         this.db = new sqlite3(dbPath);
-        this.createTable(); // Create the table when the class is instantiated
+        this.createTable(this.tableSuffix); // Create the table when the class is instantiated
     }
 
-    createTable() {
+    getTableName() {
+        return `events_${this.tableSuffix}`;
+    }
+
+    createTable(tableSuffix: string) {
         const sql = `
-            CREATE TABLE IF NOT EXISTS events
+            CREATE TABLE IF NOT EXISTS ${this.getTableName()}
             (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 eventId     TEXT,
@@ -61,7 +63,7 @@ export default class SqliteHelper {
      */
     insertEvent(event: IEventRecord) {
         const stmt = this.prepare(`
-            INSERT INTO events (eventId, ts, eqName, tagName, type, isActive, triggerCond, description)
+            INSERT INTO ${this.getTableName()} (eventId, ts, eqName, tagName, type, isActive, triggerCond, description)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
@@ -83,7 +85,7 @@ export default class SqliteHelper {
      */
     deactivateEvent(eventRecord: IEventRecord) {
         const checkStmt = this.prepare(`SELECT *
-                                        FROM events
+                                        FROM ${this.getTableName()}
                                         WHERE eventId = ?
                                         order by id desc
                                         limit 1`);
@@ -92,7 +94,7 @@ export default class SqliteHelper {
             return null;
         }
 
-        const updateStmt = this.prepare(`UPDATE events
+        const updateStmt = this.prepare(`UPDATE ${this.getTableName()}
                                          SET isActive = ?,
                                              duration = ?
                                          WHERE id = ?`);
@@ -106,7 +108,7 @@ export default class SqliteHelper {
      */
     fetchEvent(eventId: string): IEventRecord | null {
         const stmt = this.prepare(`SELECT *
-                                   FROM events
+                                   FROM ${this.getTableName()}
                                    WHERE eventId = ?
                                    order by id desc
                                    limit 1`);
@@ -121,7 +123,7 @@ export default class SqliteHelper {
      */
     fetchAllActiveEvents(): IEventSqlRecord[] {
         const stmt = this.prepare(`SELECT *
-                                   FROM events
+                                   FROM ${this.getTableName()}
                                    where isActive = 1`);
         return stmt.all() as IEventSqlRecord[];
     }
@@ -130,11 +132,13 @@ export default class SqliteHelper {
      * Fetches all events.
      * @returns Array of matching event records.
      */
-    fetchAllEvents(): IEventSqlRecord[] {
+    fetchAllEvents(count: number): IEventSqlRecord[] {
         const stmt = this.prepare(`SELECT *
-                                   FROM events`);
+                                   FROM ${this.getTableName()}
+                                   order by id desc
+                                   limit ?`);
 
-        const result = stmt.all() as IEventSqlRecord[];
+        const result = stmt.all(count) as IEventSqlRecord[];
 
         for (const event of result) {
             event.triggerCond = JSON.parse(event.triggerCond);
@@ -157,7 +161,8 @@ export default class SqliteHelper {
     }
 
     clearAllActiveAlarms() {
-        const stmt = this.prepare(`UPDATE events set isActive = 0`);
+        const stmt = this.prepare(`UPDATE ${this.getTableName()}
+                                   set isActive = 0`);
         stmt.run();
     }
 }

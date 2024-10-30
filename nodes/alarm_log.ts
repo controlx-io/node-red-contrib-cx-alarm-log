@@ -8,7 +8,9 @@ import {
     IEventConfig,
     IEventRecord,
     isObject,
-    Logger
+    Logger,
+    AlarmOut,
+    EventOut, flattenTags
 } from "./tools";
 import * as path from "path";
 import SqliteHelper from "./sqlite_helper";
@@ -27,9 +29,7 @@ interface IConfig {
 
 
 module.exports = function (RED: NodeRedApp) {
-
     const plcTagValuesState: { [nodeId: string]: any } = {};
-
     const activeAlarms: { [nodeId: string]: IActiveAlarmsRegister } = {};
 
     function getActiveAlarms(sqliteHelper: SqliteHelper) {
@@ -50,14 +50,15 @@ module.exports = function (RED: NodeRedApp) {
 
     function AlarmLogNode(config: IConfig) {
         let eventConfigs: IEventConfig[] = [];
+        let eventCount = 100;
         const disabledEventMap: { [key: string]: boolean } = {};
         const unacknowledgedEventMap: { [key: string]: boolean } = {};
 
         // @ts-ignore
         RED.nodes.createNode(this, config);
         const node: Node = this;
-        const sqliteHelper = new SqliteHelper(`./alarmNode_${node.id}.sqlite`);
-        activeAlarms[node.id] = getActiveAlarms(sqliteHelper);
+        const dbHelper = new SqliteHelper(`./alarmNode.sqlite`, node.id);
+        activeAlarms[node.id] = getActiveAlarms(dbHelper);
 
         const logger = new Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new EventConfig(logger);
@@ -65,7 +66,6 @@ module.exports = function (RED: NodeRedApp) {
         if (config.configText) {
             try {
                 const sep = config.isTabSeparator ? "\t" : ",";
-
                 const conf = eventConfig.parseConfig("", config.configText, sep);
                 eventConfigs = conf.body;
                 logger.debug(`Config v.${conf.meta.version ? conf.meta.version : "'NOT IN META'"} ` +
@@ -73,7 +73,6 @@ module.exports = function (RED: NodeRedApp) {
             } catch (e) {
                 logger.error(e);
             }
-
         } else if (config.path && typeof config.path === "string") {
             try {
                 // @ts-ignore
@@ -105,15 +104,7 @@ module.exports = function (RED: NodeRedApp) {
 
             // If tags property is defined, and it is an array, convert it to an object and use this object as payload
             if (msg.tags && Array.isArray(msg.tags)) {
-                const payload: { [key: string]: any } = {};
-                for (const tag of msg.tags) {
-                    const { group, name, value } = tag;
-                    const key = group + "__" + name
-                    if (group && name && value != null) {
-                        payload[key] = value;
-                    }
-                }
-                msg.payload = payload;
+                msg.payload = flattenTags(msg.tags);
             } else if (!isObject(msg.payload)) {
                 const errMsg = "Incorrect Payload data type: " + JSON.stringify(msg.payload);
                 return logger.error(new Error(errMsg));
@@ -134,9 +125,8 @@ module.exports = function (RED: NodeRedApp) {
 
             for (const [tagName, newValue] of Object.entries(newValues)) {
                 if (disabledEventMap[tagName]) continue; // if the tag is disabled, skip it
-                const val = typeof newValue === "boolean" ?
-                    (newValue ? 1 : 0) :
-                    newValue;
+
+                const val = typeof newValue === "boolean" ? (newValue ? 1 : 0) : newValue;
 
                 if (typeof val !== "number" || !Number.isFinite(val)) continue;
 
@@ -148,18 +138,13 @@ module.exports = function (RED: NodeRedApp) {
                 alarmChecker(eventConfig, val, eventsOut, false);
             }
 
-            sqliteHelper.addAndUpdateEvent(alarmsOut);
-            sqliteHelper.addAndUpdateEvent(eventsOut);
+            dbHelper.addAndUpdateEvent(alarmsOut);
+            dbHelper.addAndUpdateEvent(eventsOut);
 
             sendNodeREDMsg(alarmsOut, eventsOut);
         });
 
-        function sendNodeREDMsg(alarmsOut: {
-            toAdd: IEventRecord[],
-            toUpdate: IEventRecord[]
-        }, eventsOut: {
-            toAdd: IEventRecord[]
-        }) {
+        function sendNodeREDMsg(alarmsOut: AlarmOut, eventsOut: EventOut) {
             const eventsToNotify = [];
             if (alarmsOut.toAdd.length || eventsOut.toAdd.length) {
                 for (const record of alarmsOut.toAdd.concat(eventsOut.toAdd)) {
@@ -179,11 +164,7 @@ module.exports = function (RED: NodeRedApp) {
                 const alarmsCountMsg = alarmMsg ?
                     { payload: countActiveAlarms(), topic: "__active_alarms_count__" } : null;
 
-                const allEventMsg = {
-                    payload: sqliteHelper.fetchAllEvents(),
-                    topic: "__get_all_events__"
-                }
-                node.send([alarmMsg, eventMsg, allEventMsg, { payload: eventsToNotify }]);
+                node.send([alarmMsg, eventMsg, getAllEventsNodeREDMsg(), { payload: eventsToNotify }]);
             }
         }
 
@@ -394,7 +375,7 @@ module.exports = function (RED: NodeRedApp) {
                         clearAlarm(eventConfig, alarmsOut);
                     }
                 }
-                sqliteHelper.addAndUpdateEvent(alarmsOut);
+                dbHelper.addAndUpdateEvent(alarmsOut);
 
                 // send NodeRED msg
                 sendNodeREDMsg(alarmsOut, { toAdd: [] });
@@ -411,8 +392,8 @@ module.exports = function (RED: NodeRedApp) {
 
             if (msg.topic === "__clear_all_active_alarms__") {
                 activeAlarms[node.id] = { F: {}, I: {}, W: {} };
-                sqliteHelper.clearAllActiveAlarms();
-                node.send([null, null, { payload: activeAlarms[node.id], topic: "__get_all_events__" }]);
+                dbHelper.clearAllActiveAlarms();
+                node.send([null, null, getAllEventsNodeREDMsg()]);
                 return true;
             }
 
@@ -443,11 +424,19 @@ module.exports = function (RED: NodeRedApp) {
             }
 
             if (msg.topic === "__get_all_events__") {
-                node.send([null, null, { payload: sqliteHelper.fetchAllEvents(), topic: msg.topic }]);
+                if (typeof msg.payload !== "number" || Number.isFinite(msg.payload)) eventCount = msg.payload;
+                node.send([null, null, getAllEventsNodeREDMsg()]);
                 return true;
             }
 
             return false;
+        }
+
+        function getAllEventsNodeREDMsg() {
+            return {
+                payload: dbHelper.fetchAllEvents(eventCount),
+                topic: "__get_all_events__"
+            }
         }
 
     }

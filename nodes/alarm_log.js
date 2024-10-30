@@ -48,12 +48,13 @@ module.exports = function (RED) {
     }
     function AlarmLogNode(config) {
         let eventConfigs = [];
+        let eventCount = 100;
         const disabledEventMap = {};
         const unacknowledgedEventMap = {};
         RED.nodes.createNode(this, config);
         const node = this;
-        const sqliteHelper = new sqlite_helper_1.default(`./alarmNode_${node.id}.sqlite`);
-        activeAlarms[node.id] = getActiveAlarms(sqliteHelper);
+        const dbHelper = new sqlite_helper_1.default(`./alarmNode.sqlite`, node.id);
+        activeAlarms[node.id] = getActiveAlarms(dbHelper);
         const logger = new tools_1.Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new tools_1.EventConfig(logger);
         if (config.configText) {
@@ -92,15 +93,7 @@ module.exports = function (RED) {
             if (!Object.keys(eventConfigs).length)
                 return logger.error(new Error("Event config is empty."));
             if (msg.tags && Array.isArray(msg.tags)) {
-                const payload = {};
-                for (const tag of msg.tags) {
-                    const { group, name, value } = tag;
-                    const key = group + "__" + name;
-                    if (group && name && value != null) {
-                        payload[key] = value;
-                    }
-                }
-                msg.payload = payload;
+                msg.payload = (0, tools_1.flattenTags)(msg.tags);
             }
             else if (!(0, tools_1.isObject)(msg.payload)) {
                 const errMsg = "Incorrect Payload data type: " + JSON.stringify(msg.payload);
@@ -120,9 +113,7 @@ module.exports = function (RED) {
             for (const [tagName, newValue] of Object.entries(newValues)) {
                 if (disabledEventMap[tagName])
                     continue;
-                const val = typeof newValue === "boolean" ?
-                    (newValue ? 1 : 0) :
-                    newValue;
+                const val = typeof newValue === "boolean" ? (newValue ? 1 : 0) : newValue;
                 if (typeof val !== "number" || !Number.isFinite(val))
                     continue;
                 const eventConfig = eventConfigs.find(event => event.tagName === tagName);
@@ -131,8 +122,8 @@ module.exports = function (RED) {
                 alarmChecker(eventConfig, val, alarmsOut, true);
                 alarmChecker(eventConfig, val, eventsOut, false);
             }
-            sqliteHelper.addAndUpdateEvent(alarmsOut);
-            sqliteHelper.addAndUpdateEvent(eventsOut);
+            dbHelper.addAndUpdateEvent(alarmsOut);
+            dbHelper.addAndUpdateEvent(eventsOut);
             sendNodeREDMsg(alarmsOut, eventsOut);
         });
         function sendNodeREDMsg(alarmsOut, eventsOut) {
@@ -152,11 +143,7 @@ module.exports = function (RED) {
                     { payload: eventsOut, topic: config.eventTopic } : null;
                 const alarmsCountMsg = alarmMsg ?
                     { payload: countActiveAlarms(), topic: "__active_alarms_count__" } : null;
-                const allEventMsg = {
-                    payload: sqliteHelper.fetchAllEvents(),
-                    topic: "__get_all_events__"
-                };
-                node.send([alarmMsg, eventMsg, allEventMsg, { payload: eventsToNotify }]);
+                node.send([alarmMsg, eventMsg, getAllEventsNodeREDMsg(), { payload: eventsToNotify }]);
             }
         }
         function alarmChecker(eventConfig, val, result, isAlarm) {
@@ -325,7 +312,7 @@ module.exports = function (RED) {
                         clearAlarm(eventConfig, alarmsOut);
                     }
                 }
-                sqliteHelper.addAndUpdateEvent(alarmsOut);
+                dbHelper.addAndUpdateEvent(alarmsOut);
                 sendNodeREDMsg(alarmsOut, { toAdd: [] });
                 return true;
             }
@@ -339,8 +326,8 @@ module.exports = function (RED) {
             }
             if (msg.topic === "__clear_all_active_alarms__") {
                 activeAlarms[node.id] = { F: {}, I: {}, W: {} };
-                sqliteHelper.clearAllActiveAlarms();
-                node.send([null, null, { payload: activeAlarms[node.id], topic: "__get_all_events__" }]);
+                dbHelper.clearAllActiveAlarms();
+                node.send([null, null, getAllEventsNodeREDMsg()]);
                 return true;
             }
             return false;
@@ -363,10 +350,18 @@ module.exports = function (RED) {
                 return true;
             }
             if (msg.topic === "__get_all_events__") {
-                node.send([null, null, { payload: sqliteHelper.fetchAllEvents(), topic: msg.topic }]);
+                if (typeof msg.payload !== "number" || Number.isFinite(msg.payload))
+                    eventCount = msg.payload;
+                node.send([null, null, getAllEventsNodeREDMsg()]);
                 return true;
             }
             return false;
+        }
+        function getAllEventsNodeREDMsg() {
+            return {
+                payload: dbHelper.fetchAllEvents(eventCount),
+                topic: "__get_all_events__"
+            };
         }
     }
     RED.nodes.registerType("cx_alarm_log", AlarmLogNode);

@@ -49,6 +49,13 @@ export interface IActiveAlarmsRegister {
     }
 }
 
+export interface AlarmOut extends EventOut {
+    toUpdate: IEventRecord[]
+}
+
+export interface EventOut {
+    toAdd: IEventRecord[]
+}
 
 export function isPrimitive(val: any): boolean {
     return !isNaN(val) && val != null && val !== Object(val);
@@ -72,6 +79,18 @@ export function filterNewValues(oldObject: { [key: string]: any }, newObject: { 
     }
 
     return newValues
+}
+
+export function flattenTags(tags: { group: string, name: string, value: any }[]) {
+    const payload: { [key: string]: any } = {};
+    for (const tag of tags) {
+        const { group, name, value } = tag;
+        const key = group + "__" + name
+        if (group && name && value != null) {
+            payload[key] = value;
+        }
+    }
+    return payload;
 }
 
 export class Logger {
