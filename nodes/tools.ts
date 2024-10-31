@@ -7,6 +7,22 @@ export const ALARM_TYPES = ["I", "W", "F"] as const;
 export type EventType = typeof EVENT_TYPES[number];
 export type AlarmType = typeof ALARM_TYPES[number];
 
+export interface IDBHelper {
+    insertEvent(event: IEventRecord): void;
+
+    deactivateEvent(event: IEventRecord): void;
+
+    fetchAllActiveEvents(): IEventRecord[];
+
+    fetchAllEvents(count: number): IEventRecord[];
+
+    addAndUpdateEvent(out: { toAdd: IEventRecord[], toUpdate?: IEventRecord[] }): void;
+
+    clearAllActiveAlarms(): void;
+
+    getActiveAlarms(): IActiveAlarmsRegister;
+}
+
 export interface ITriggerConfig {
     op: "=" | ">" | "<" | "#" | "?",  // equal, gt,
     val: number,

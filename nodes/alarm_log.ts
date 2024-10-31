@@ -10,7 +10,9 @@ import {
     isObject,
     Logger,
     AlarmOut,
-    EventOut, flattenTags
+    EventOut,
+    flattenTags,
+    IDBHelper,
 } from "./tools";
 import * as path from "path";
 import SqliteHelper from "./sqlite_helper";
@@ -32,21 +34,6 @@ module.exports = function (RED: NodeRedApp) {
     const plcTagValuesState: { [nodeId: string]: any } = {};
     const activeAlarms: { [nodeId: string]: IActiveAlarmsRegister } = {};
 
-    function getActiveAlarms(sqliteHelper: SqliteHelper) {
-        const alarms = sqliteHelper.fetchAllActiveEvents();
-
-        const map: IActiveAlarmsRegister = {
-            "I": {},
-            "W": {},
-            "F": {},
-        }
-
-        for (const alarm of alarms) {
-            if (alarm.type === 'E') continue;
-            map[alarm.type][alarm.eventId] = true;
-        }
-        return map;
-    }
 
     function AlarmLogNode(config: IConfig) {
         let eventConfigs: IEventConfig[] = [];
@@ -57,8 +44,8 @@ module.exports = function (RED: NodeRedApp) {
         // @ts-ignore
         RED.nodes.createNode(this, config);
         const node: Node = this;
-        const dbHelper = new SqliteHelper(`./alarmNode.sqlite`, node.id);
-        activeAlarms[node.id] = getActiveAlarms(dbHelper);
+        const dbHelper: IDBHelper = new SqliteHelper(`./alarmNode.sqlite`, node.id);
+        activeAlarms[node.id] = dbHelper.getActiveAlarms();
 
         const logger = new Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new EventConfig(logger);

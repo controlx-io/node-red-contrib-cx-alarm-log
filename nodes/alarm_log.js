@@ -32,20 +32,6 @@ const sqlite_helper_1 = __importDefault(require("./sqlite_helper"));
 module.exports = function (RED) {
     const plcTagValuesState = {};
     const activeAlarms = {};
-    function getActiveAlarms(sqliteHelper) {
-        const alarms = sqliteHelper.fetchAllActiveEvents();
-        const map = {
-            "I": {},
-            "W": {},
-            "F": {},
-        };
-        for (const alarm of alarms) {
-            if (alarm.type === 'E')
-                continue;
-            map[alarm.type][alarm.eventId] = true;
-        }
-        return map;
-    }
     function AlarmLogNode(config) {
         let eventConfigs = [];
         let eventCount = 100;
@@ -54,7 +40,7 @@ module.exports = function (RED) {
         RED.nodes.createNode(this, config);
         const node = this;
         const dbHelper = new sqlite_helper_1.default(`./alarmNode.sqlite`, node.id);
-        activeAlarms[node.id] = getActiveAlarms(dbHelper);
+        activeAlarms[node.id] = dbHelper.getActiveAlarms();
         const logger = new tools_1.Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new tools_1.EventConfig(logger);
         if (config.configText) {
