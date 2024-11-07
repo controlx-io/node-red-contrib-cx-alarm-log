@@ -3,18 +3,20 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EventConfig = exports.Logger = exports.flattenTags = exports.filterNewValues = exports.isObject = exports.isPrimitive = exports.ALARM_TYPES = exports.EVENT_TYPES = void 0;
+exports.EventConfig = exports.Logger = exports.ALARM_TYPES = exports.EVENT_TYPES = void 0;
+exports.isPrimitive = isPrimitive;
+exports.isObject = isObject;
+exports.filterNewValues = filterNewValues;
+exports.flattenTags = flattenTags;
 const fs_1 = __importDefault(require("fs"));
 exports.EVENT_TYPES = ["E"];
 exports.ALARM_TYPES = ["I", "W", "F"];
 function isPrimitive(val) {
     return !isNaN(val) && val != null && val !== Object(val);
 }
-exports.isPrimitive = isPrimitive;
 function isObject(val) {
     return val.constructor.name === "Object" && typeof val === "object";
 }
-exports.isObject = isObject;
 function filterNewValues(oldObject, newObject) {
     const newKeys = Object.keys(newObject);
     if (!newKeys)
@@ -27,7 +29,6 @@ function filterNewValues(oldObject, newObject) {
     }
     return newValues;
 }
-exports.filterNewValues = filterNewValues;
 function flattenTags(tags) {
     const payload = {};
     for (const tag of tags) {
@@ -39,7 +40,6 @@ function flattenTags(tags) {
     }
     return payload;
 }
-exports.flattenTags = flattenTags;
 class Logger {
     constructor(node, isDebug) {
         this.node = node;

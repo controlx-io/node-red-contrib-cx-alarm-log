@@ -32,7 +32,10 @@ const sqlite_helper_1 = __importDefault(require("./sqlite_helper"));
 module.exports = function (RED) {
     const plcTagValuesState = {};
     const activeAlarms = {};
+    const eventsToNotify = {};
     function AlarmLogNode(config) {
+        let notificationTimeoutTime = 60 * 1000;
+        let notificationTimer = null;
         let eventConfigs = [];
         let eventCount = 100;
         const disabledEventMap = {};
@@ -41,7 +44,8 @@ module.exports = function (RED) {
         const node = this;
         const dbHelper = new sqlite_helper_1.default(`./alarmNode.sqlite`, node.id);
         activeAlarms[node.id] = dbHelper.getActiveAlarms();
-        const logger = new tools_1.Logger(node, config.isDebug || config.isMochaTesting);
+        eventsToNotify[node.id] = [];
+        const logger = new tools_1.Logger(node, true || config.isDebug || config.isMochaTesting);
         const eventConfig = new tools_1.EventConfig(logger);
         if (config.configText) {
             try {
@@ -112,14 +116,43 @@ module.exports = function (RED) {
             dbHelper.addAndUpdateEvent(eventsOut);
             sendNodeREDMsg(alarmsOut, eventsOut);
         });
+        function addEventToNotify(record) {
+            if (unacknowledgedEventMap[record.tagName])
+                return;
+            const startTimer = eventsToNotify[node.id].length === 0;
+            if (eventsToNotify[node.id].findIndex(e => e.eventId === record.eventId) === -1)
+                eventsToNotify[node.id].push(record);
+            if (startTimer && !notificationTimer)
+                notificationTimer = setTimeout(() => {
+                    notificationTimer = null;
+                    if (eventsToNotify[node.id].length !== 0) {
+                        node.send([null, null, null, { payload: eventsToNotify[node.id], topic: 'notification' }]);
+                        for (const event of eventsToNotify[node.id]) {
+                            unacknowledgedEventMap[event.tagName] = true;
+                        }
+                        eventsToNotify[node.id] = [];
+                        node.send([null, null, null, unacknowledgedEventMapMsg()]);
+                    }
+                }, notificationTimeoutTime);
+        }
+        function updateEventToNotify(record) {
+            const index = eventsToNotify[node.id].findIndex(e => e.eventId === record.eventId);
+            if (!record.isActive && index !== -1)
+                eventsToNotify[node.id].splice(index, 1);
+            if (eventsToNotify[node.id].length === 0 && notificationTimer) {
+                clearTimeout(notificationTimer);
+                notificationTimer = null;
+            }
+        }
         function sendNodeREDMsg(alarmsOut, eventsOut) {
-            const eventsToNotify = [];
             if (alarmsOut.toAdd.length || eventsOut.toAdd.length) {
                 for (const record of alarmsOut.toAdd.concat(eventsOut.toAdd)) {
-                    if (unacknowledgedEventMap[record.tagName])
-                        continue;
-                    eventsToNotify.push(record);
-                    unacknowledgedEventMap[record.tagName] = true;
+                    addEventToNotify(record);
+                }
+            }
+            if (alarmsOut.toUpdate.length) {
+                for (const record of alarmsOut.toUpdate) {
+                    updateEventToNotify(record);
                 }
             }
             if (alarmsOut.toUpdate.length || alarmsOut.toAdd.length || eventsOut.toAdd.length) {
@@ -127,9 +160,7 @@ module.exports = function (RED) {
                     { payload: alarmsOut, topic: config.alarmTopic } : null;
                 const eventMsg = (eventsOut.toAdd.length) ?
                     { payload: eventsOut, topic: config.eventTopic } : null;
-                const alarmsCountMsg = alarmMsg ?
-                    { payload: countActiveAlarms(), topic: "__active_alarms_count__" } : null;
-                node.send([alarmMsg, eventMsg, getAllEventsNodeREDMsg(), { payload: eventsToNotify }]);
+                node.send([alarmMsg, eventMsg, getAllEventsNodeREDMsg(), unacknowledgedEventMapMsg()]);
             }
         }
         function alarmChecker(eventConfig, val, result, isAlarm) {
@@ -308,12 +339,19 @@ module.exports = function (RED) {
                     if (unacknowledgedEventMap[event])
                         delete unacknowledgedEventMap[event];
                 }
+                node.send([null, null, null, unacknowledgedEventMapMsg()]);
                 return true;
             }
             if (msg.topic === "__clear_all_active_alarms__") {
                 activeAlarms[node.id] = { F: {}, I: {}, W: {} };
                 dbHelper.clearAllActiveAlarms();
                 node.send([null, null, getAllEventsNodeREDMsg()]);
+                return true;
+            }
+            if (msg.topic === "__set_notification_timeout_sec__") {
+                if (typeof msg.payload !== "number" || !Number.isFinite(msg.payload))
+                    return true;
+                notificationTimeoutTime = msg.payload * 1000;
                 return true;
             }
             return false;
@@ -345,9 +383,12 @@ module.exports = function (RED) {
         }
         function getAllEventsNodeREDMsg() {
             return {
+                topic: "__get_all_events__",
                 payload: dbHelper.fetchAllEvents(eventCount),
-                topic: "__get_all_events__"
             };
+        }
+        function unacknowledgedEventMapMsg() {
+            return { topic: 'unacknowledged_events', payload: unacknowledgedEventMap };
         }
     }
     RED.nodes.registerType("cx_alarm_log", AlarmLogNode);

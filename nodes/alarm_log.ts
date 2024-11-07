@@ -1,4 +1,4 @@
-import { Node, NodeRedApp } from "node-red";
+import { log, Node, NodeRedApp } from "node-red";
 import {
     ALARM_TYPES,
     AlarmType,
@@ -33,9 +33,11 @@ interface IConfig {
 module.exports = function (RED: NodeRedApp) {
     const plcTagValuesState: { [nodeId: string]: any } = {};
     const activeAlarms: { [nodeId: string]: IActiveAlarmsRegister } = {};
-
+    const eventsToNotify: { [key: string]: IEventRecord[] } = {};
 
     function AlarmLogNode(config: IConfig) {
+        let notificationTimeoutTime = 60 * 1000;
+        let notificationTimer: NodeJS.Timeout | null = null;
         let eventConfigs: IEventConfig[] = [];
         let eventCount = 100;
         const disabledEventMap: { [key: string]: boolean } = {};
@@ -46,8 +48,9 @@ module.exports = function (RED: NodeRedApp) {
         const node: Node = this;
         const dbHelper: IDBHelper = new SqliteHelper(`./alarmNode.sqlite`, node.id);
         activeAlarms[node.id] = dbHelper.getActiveAlarms();
+        eventsToNotify[node.id] = [];
 
-        const logger = new Logger(node, config.isDebug || config.isMochaTesting);
+        const logger = new Logger(node, true || config.isDebug || config.isMochaTesting);
         const eventConfig = new EventConfig(logger);
 
         if (config.configText) {
@@ -131,13 +134,52 @@ module.exports = function (RED: NodeRedApp) {
             sendNodeREDMsg(alarmsOut, eventsOut);
         });
 
+        function addEventToNotify(record: IEventRecord) {
+            if (unacknowledgedEventMap[record.tagName]) return;
+
+            const startTimer = eventsToNotify[node.id].length === 0;
+            // push the event to the eventsToNotify array if it is not in there
+            if (eventsToNotify[node.id].findIndex(e => e.eventId === record.eventId) === -1) eventsToNotify[node.id].push(record);
+
+            if (startTimer && !notificationTimer) notificationTimer = setTimeout(() => {
+                notificationTimer = null;
+                if (eventsToNotify[node.id].length !== 0) {
+                    node.send([null, null, null, { payload: eventsToNotify[node.id], topic: 'notification' }]);
+                    // flag all events which sent notification as unacknowledged
+                    for (const event of eventsToNotify[node.id]) {
+                        unacknowledgedEventMap[event.tagName] = true;
+                    }
+                    eventsToNotify[node.id] = [];
+                    node.send([null, null, null, unacknowledgedEventMapMsg()]);
+                }
+            }, notificationTimeoutTime);
+        }
+
+        function updateEventToNotify(record: IEventRecord) {
+            // remove the event from the eventsToNotify array if it is in there
+            const index = eventsToNotify[node.id].findIndex(e => e.eventId === record.eventId);
+            if (!record.isActive && index !== -1) eventsToNotify[node.id].splice(index, 1);
+
+            // if there are no events to notify and the timer is running, clear it
+            if (eventsToNotify[node.id].length === 0 && notificationTimer) {
+                clearTimeout(notificationTimer);
+                notificationTimer = null;
+            }
+        }
+
         function sendNodeREDMsg(alarmsOut: AlarmOut, eventsOut: EventOut) {
-            const eventsToNotify = [];
             if (alarmsOut.toAdd.length || eventsOut.toAdd.length) {
                 for (const record of alarmsOut.toAdd.concat(eventsOut.toAdd)) {
-                    if (unacknowledgedEventMap[record.tagName]) continue;
-                    eventsToNotify.push(record);
-                    unacknowledgedEventMap[record.tagName] = true;
+                    // if the event is not acknowledged, add it to the unacknowledgedEventMap
+
+                    addEventToNotify(record);
+                    
+                }
+                
+            }
+            if (alarmsOut.toUpdate.length) {
+                for (const record of alarmsOut.toUpdate) {
+                    updateEventToNotify(record);
                 }
             }
 
@@ -148,10 +190,10 @@ module.exports = function (RED: NodeRedApp) {
                 const eventMsg = (eventsOut.toAdd.length) ?
                     { payload: eventsOut, topic: config.eventTopic } : null;
 
-                const alarmsCountMsg = alarmMsg ?
-                    { payload: countActiveAlarms(), topic: "__active_alarms_count__" } : null;
+                // const alarmsCountMsg = alarmMsg ?
+                //     { payload: countActiveAlarms(), topic: "__active_alarms_count__" } : null;
 
-                node.send([alarmMsg, eventMsg, getAllEventsNodeREDMsg(), { payload: eventsToNotify }]);
+                node.send([alarmMsg, eventMsg, getAllEventsNodeREDMsg(), unacknowledgedEventMapMsg()]);
             }
         }
 
@@ -374,6 +416,7 @@ module.exports = function (RED: NodeRedApp) {
                 for (const event of ackEvents) {
                     if (unacknowledgedEventMap[event]) delete unacknowledgedEventMap[event];
                 }
+                node.send([null, null, null, unacknowledgedEventMapMsg()]);
                 return true;
             }
 
@@ -381,6 +424,12 @@ module.exports = function (RED: NodeRedApp) {
                 activeAlarms[node.id] = { F: {}, I: {}, W: {} };
                 dbHelper.clearAllActiveAlarms();
                 node.send([null, null, getAllEventsNodeREDMsg()]);
+                return true;
+            }
+
+            if (msg.topic === "__set_notification_timeout_sec__") {
+                if (typeof msg.payload !== "number" || !Number.isFinite(msg.payload)) return true;
+                notificationTimeoutTime = msg.payload * 1000;
                 return true;
             }
 
@@ -421,9 +470,13 @@ module.exports = function (RED: NodeRedApp) {
 
         function getAllEventsNodeREDMsg() {
             return {
+                topic: "__get_all_events__",
                 payload: dbHelper.fetchAllEvents(eventCount),
-                topic: "__get_all_events__"
             }
+        }
+        
+        function unacknowledgedEventMapMsg() {
+          return { topic: 'unacknowledged_events', payload: unacknowledgedEventMap };
         }
 
     }
