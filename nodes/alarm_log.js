@@ -45,7 +45,7 @@ module.exports = function (RED) {
         const dbHelper = new sqlite_helper_1.default(`./alarmNode.sqlite`, node.id);
         activeAlarms[node.id] = dbHelper.getActiveAlarms();
         eventsToNotify[node.id] = [];
-        const logger = new tools_1.Logger(node, true || config.isDebug || config.isMochaTesting);
+        const logger = new tools_1.Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new tools_1.EventConfig(logger);
         if (config.configText) {
             try {
@@ -126,7 +126,7 @@ module.exports = function (RED) {
                 notificationTimer = setTimeout(() => {
                     notificationTimer = null;
                     if (eventsToNotify[node.id].length !== 0) {
-                        node.send([null, null, null, { payload: eventsToNotify[node.id], topic: 'notification' }]);
+                        node.send([null, null, null, { payload: eventsToNotify[node.id], topic: '__notifications__' }]);
                         for (const event of eventsToNotify[node.id]) {
                             unacknowledgedEventMap[event.tagName] = true;
                         }
@@ -337,7 +337,7 @@ module.exports = function (RED) {
                 const ackEvents = Array.isArray(msg.payload) ? msg.payload : [msg.payload];
                 for (const event of ackEvents) {
                     if (unacknowledgedEventMap[event])
-                        delete unacknowledgedEventMap[event];
+                        unacknowledgedEventMap[event] = false;
                 }
                 node.send([null, null, null, unacknowledgedEventMapMsg()]);
                 return true;
@@ -362,7 +362,7 @@ module.exports = function (RED) {
                 return true;
             }
             if (msg.topic === "__get_config__") {
-                node.send([null, null, { payload: eventConfigs, topic: msg.topic }]);
+                node.send([null, null, { payload: eventConfigs, topic: msg.topic }, unacknowledgedEventMapMsg()]);
                 return true;
             }
             if (msg.topic === "__get_active_alarms__") {
@@ -388,7 +388,7 @@ module.exports = function (RED) {
             };
         }
         function unacknowledgedEventMapMsg() {
-            return { topic: 'unacknowledged_events', payload: unacknowledgedEventMap };
+            return { topic: '__unacknowledged_events__', payload: unacknowledgedEventMap };
         }
     }
     RED.nodes.registerType("cx_alarm_log", AlarmLogNode);

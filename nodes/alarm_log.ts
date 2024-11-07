@@ -50,7 +50,7 @@ module.exports = function (RED: NodeRedApp) {
         activeAlarms[node.id] = dbHelper.getActiveAlarms();
         eventsToNotify[node.id] = [];
 
-        const logger = new Logger(node, true || config.isDebug || config.isMochaTesting);
+        const logger = new Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new EventConfig(logger);
 
         if (config.configText) {
@@ -144,7 +144,7 @@ module.exports = function (RED: NodeRedApp) {
             if (startTimer && !notificationTimer) notificationTimer = setTimeout(() => {
                 notificationTimer = null;
                 if (eventsToNotify[node.id].length !== 0) {
-                    node.send([null, null, null, { payload: eventsToNotify[node.id], topic: 'notification' }]);
+                    node.send([null, null, null, { payload: eventsToNotify[node.id], topic: '__notifications__' }]);
                     // flag all events which sent notification as unacknowledged
                     for (const event of eventsToNotify[node.id]) {
                         unacknowledgedEventMap[event.tagName] = true;
@@ -170,10 +170,7 @@ module.exports = function (RED: NodeRedApp) {
         function sendNodeREDMsg(alarmsOut: AlarmOut, eventsOut: EventOut) {
             if (alarmsOut.toAdd.length || eventsOut.toAdd.length) {
                 for (const record of alarmsOut.toAdd.concat(eventsOut.toAdd)) {
-                    // if the event is not acknowledged, add it to the unacknowledgedEventMap
-
                     addEventToNotify(record);
-                    
                 }
                 
             }
@@ -414,7 +411,7 @@ module.exports = function (RED: NodeRedApp) {
             if (msg.topic === "__acknowledge_event__") {
                 const ackEvents = Array.isArray(msg.payload) ? msg.payload : [msg.payload];
                 for (const event of ackEvents) {
-                    if (unacknowledgedEventMap[event]) delete unacknowledgedEventMap[event];
+                    if (unacknowledgedEventMap[event]) unacknowledgedEventMap[event] = false;
                 }
                 node.send([null, null, null, unacknowledgedEventMapMsg()]);
                 return true;
@@ -445,7 +442,7 @@ module.exports = function (RED: NodeRedApp) {
 
 
             if (msg.topic === "__get_config__") {
-                node.send([null, null, { payload: eventConfigs, topic: msg.topic }]);
+                node.send([null, null, { payload: eventConfigs, topic: msg.topic }, unacknowledgedEventMapMsg()]);
                 return true;
             }
 
@@ -476,7 +473,7 @@ module.exports = function (RED: NodeRedApp) {
         }
         
         function unacknowledgedEventMapMsg() {
-          return { topic: 'unacknowledged_events', payload: unacknowledgedEventMap };
+          return { topic: '__unacknowledged_events__', payload: unacknowledgedEventMap };
         }
 
     }
