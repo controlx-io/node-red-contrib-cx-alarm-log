@@ -34,21 +34,25 @@ module.exports = function (RED: NodeRedApp) {
     const plcTagValuesState: { [nodeId: string]: any } = {};
     const activeAlarms: { [nodeId: string]: IActiveAlarmsRegister } = {};
     const eventsToNotify: { [key: string]: IEventRecord[] } = {};
+    
+    const disabledEventMap: { [nodeId: string]: { [key: string]: boolean } } = {};
+    const unacknowledgedEventMap: { [nodeId: string]: { [key: string]: boolean } } = {};
 
     function AlarmLogNode(config: IConfig) {
         let notificationTimeoutTime = 60 * 1000;
         let notificationTimer: NodeJS.Timeout | null = null;
         let eventConfigs: IEventConfig[] = [];
         let eventCount = 100;
-        const disabledEventMap: { [key: string]: boolean } = {};
-        const unacknowledgedEventMap: { [key: string]: boolean } = {};
 
         // @ts-ignore
         RED.nodes.createNode(this, config);
         const node: Node = this;
+
         const dbHelper: IDBHelper = new SqliteHelper(`./alarmNode.sqlite`, node.id);
         activeAlarms[node.id] = dbHelper.getActiveAlarms();
         eventsToNotify[node.id] = [];
+        disabledEventMap[node.id] = {};
+        unacknowledgedEventMap[node.id] = {};
 
         const logger = new Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new EventConfig(logger);
@@ -114,7 +118,7 @@ module.exports = function (RED: NodeRedApp) {
             };
 
             for (const [tagName, newValue] of Object.entries(newValues)) {
-                if (disabledEventMap[tagName]) continue; // if the tag is disabled, skip it
+                if (disabledEventMap[node.id][tagName]) continue; // if the tag is disabled, skip it
 
                 const val = typeof newValue === "boolean" ? (newValue ? 1 : 0) : newValue;
 
@@ -135,7 +139,7 @@ module.exports = function (RED: NodeRedApp) {
         });
 
         function addEventToNotify(record: IEventRecord) {
-            if (unacknowledgedEventMap[record.tagName]) return;
+            if (unacknowledgedEventMap[node.id][record.tagName]) return;
 
             const startTimer = eventsToNotify[node.id].length === 0;
             // push the event to the eventsToNotify array if it is not in there
@@ -147,7 +151,7 @@ module.exports = function (RED: NodeRedApp) {
                     node.send([null, null, null, { payload: eventsToNotify[node.id], topic: '__notifications__' }]);
                     // flag all events which sent notification as unacknowledged
                     for (const event of eventsToNotify[node.id]) {
-                        unacknowledgedEventMap[event.tagName] = true;
+                        unacknowledgedEventMap[node.id][event.tagName] = true;
                     }
                     eventsToNotify[node.id] = [];
                     node.send([null, null, null, unacknowledgedEventMapMsg()]);
@@ -385,18 +389,18 @@ module.exports = function (RED: NodeRedApp) {
                 };
 
                 for (const [tagName, enable] of Object.entries(msg.payload)) {
-                    let val = plcTagValuesState[node.id][tagName];
-                    val = typeof val === "boolean" ? (val ? 1 : 0) : val;
-                    if (typeof val !== "number" || !Number.isFinite(val)) continue;
-
                     const eventConfig = eventConfigs.find(event => event.tagName === tagName);
                     if (!eventConfig) continue;
 
                     if (enable) {
-                        delete disabledEventMap[tagName];
+                        delete disabledEventMap[node.id][tagName];
+
+                        let val = plcTagValuesState[node.id][tagName];
+                        val = typeof val === "boolean" ? (val ? 1 : 0) : val;
+                        if (typeof val !== "number" || !Number.isFinite(val)) continue;
                         alarmChecker(eventConfig, val, alarmsOut, true);
                     } else {
-                        disabledEventMap[tagName] = true;
+                        disabledEventMap[node.id][tagName] = true;
                         // clear the existing alarm
                         clearAlarm(eventConfig, alarmsOut);
                     }
@@ -411,7 +415,7 @@ module.exports = function (RED: NodeRedApp) {
             if (msg.topic === "__acknowledge_event__") {
                 const ackEvents = Array.isArray(msg.payload) ? msg.payload : [msg.payload];
                 for (const event of ackEvents) {
-                    if (unacknowledgedEventMap[event]) unacknowledgedEventMap[event] = false;
+                    if (unacknowledgedEventMap[node.id][event]) unacknowledgedEventMap[node.id][event] = false;
                 }
                 node.send([null, null, null, unacknowledgedEventMapMsg()]);
                 return true;
@@ -443,6 +447,7 @@ module.exports = function (RED: NodeRedApp) {
 
             if (msg.topic === "__get_config__") {
                 node.send([null, null, { payload: eventConfigs, topic: msg.topic }, unacknowledgedEventMapMsg()]);
+                node.send([null, null, { payload: disabledEventMap[node.id], topic: '__disabled_events__' }]);
                 return true;
             }
 
@@ -473,7 +478,7 @@ module.exports = function (RED: NodeRedApp) {
         }
         
         function unacknowledgedEventMapMsg() {
-          return { topic: '__unacknowledged_events__', payload: unacknowledgedEventMap };
+          return { topic: '__unacknowledged_events__', payload: unacknowledgedEventMap[node.id] };
         }
 
     }

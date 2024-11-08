@@ -8,14 +8,14 @@ class SqliteHelper {
     constructor(dbPath, tableSuffix) {
         this.tableSuffix = tableSuffix;
         this.db = new better_sqlite3_1.default(dbPath);
-        this.createTable(this.tableSuffix);
+        this.createTable();
     }
-    getTableName() {
+    get tableName() {
         return `events_${this.tableSuffix}`;
     }
-    createTable(tableSuffix) {
+    createTable() {
         const sql = `
-            CREATE TABLE IF NOT EXISTS ${this.getTableName()}
+            CREATE TABLE IF NOT EXISTS ${this.tableName}
             (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 eventId     TEXT,
@@ -42,14 +42,14 @@ class SqliteHelper {
     }
     insertEvent(event) {
         const stmt = this.prepare(`
-            INSERT INTO ${this.getTableName()} (eventId, ts, eqName, tagName, type, isActive, triggerCond, description)
+            INSERT INTO ${this.tableName} (eventId, ts, eqName, tagName, type, isActive, triggerCond, description)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
         return stmt.run(event.eventId, event.ts, event.eqName, event.tagName, event.type, event.isActive ? 1 : 0, JSON.stringify(event.triggerCond), event.description);
     }
     deactivateEvent(eventRecord) {
         const checkStmt = this.prepare(`SELECT *
-                                        FROM ${this.getTableName()}
+                                        FROM ${this.tableName}
                                         WHERE eventId = ?
                                         order by id desc
                                         limit 1`);
@@ -57,7 +57,7 @@ class SqliteHelper {
         if (!result) {
             return null;
         }
-        const updateStmt = this.prepare(`UPDATE ${this.getTableName()}
+        const updateStmt = this.prepare(`UPDATE ${this.tableName}
                                          SET isActive = ?,
                                              duration = strftime('%s', 'now') - ts / 1000
                                          WHERE id = ?`);
@@ -65,13 +65,13 @@ class SqliteHelper {
     }
     fetchAllActiveEvents() {
         const stmt = this.prepare(`SELECT *
-                                   FROM ${this.getTableName()}
+                                   FROM ${this.tableName}
                                    where isActive = 1`);
         return stmt.all();
     }
     fetchAllEvents(count) {
         const stmt = this.prepare(`SELECT *
-                                   FROM ${this.getTableName()}
+                                   FROM ${this.tableName}
                                    order by id desc
                                    limit ?`);
         const result = stmt.all(count);
@@ -92,7 +92,7 @@ class SqliteHelper {
         }
     }
     clearAllActiveAlarms() {
-        const stmt = this.prepare(`UPDATE ${this.getTableName()}
+        const stmt = this.prepare(`UPDATE ${this.tableName}
                                    set isActive = 0,
                                        duration = strftime('%s', 'now') - ts / 1000
                                    where isActive = 1`);

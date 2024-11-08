@@ -19,16 +19,16 @@ export default class SqliteHelper implements IDBHelper {
 
     constructor(dbPath: string, private tableSuffix: string) {
         this.db = new sqlite3(dbPath);
-        this.createTable(this.tableSuffix); // Create the table when the class is instantiated
+        this.createTable(); // Create the table when the class is instantiated
     }
 
-    private getTableName() {
+    get tableName() {
         return `events_${this.tableSuffix}`;
     }
 
-    private createTable(tableSuffix: string) {
+    private createTable() {
         const sql = `
-            CREATE TABLE IF NOT EXISTS ${this.getTableName()}
+            CREATE TABLE IF NOT EXISTS ${this.tableName}
             (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 eventId     TEXT,
@@ -63,7 +63,7 @@ export default class SqliteHelper implements IDBHelper {
      */
     insertEvent(event: IEventRecord) {
         const stmt = this.prepare(`
-            INSERT INTO ${this.getTableName()} (eventId, ts, eqName, tagName, type, isActive, triggerCond, description)
+            INSERT INTO ${this.tableName} (eventId, ts, eqName, tagName, type, isActive, triggerCond, description)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
@@ -85,7 +85,7 @@ export default class SqliteHelper implements IDBHelper {
      */
     deactivateEvent(eventRecord: IEventRecord) {
         const checkStmt = this.prepare(`SELECT *
-                                        FROM ${this.getTableName()}
+                                        FROM ${this.tableName}
                                         WHERE eventId = ?
                                         order by id desc
                                         limit 1`);
@@ -94,7 +94,7 @@ export default class SqliteHelper implements IDBHelper {
             return null;
         }
 
-        const updateStmt = this.prepare(`UPDATE ${this.getTableName()}
+        const updateStmt = this.prepare(`UPDATE ${this.tableName}
                                          SET isActive = ?,
                                              duration = strftime('%s', 'now') - ts / 1000
                                          WHERE id = ?`);
@@ -107,7 +107,7 @@ export default class SqliteHelper implements IDBHelper {
      */
     fetchAllActiveEvents(): IEventRecord[] {
         const stmt = this.prepare(`SELECT *
-                                   FROM ${this.getTableName()}
+                                   FROM ${this.tableName}
                                    where isActive = 1`);
         return stmt.all() as IEventRecord[];
     }
@@ -118,7 +118,7 @@ export default class SqliteHelper implements IDBHelper {
      */
     fetchAllEvents(count: number): IEventRecord[] {
         const stmt = this.prepare(`SELECT *
-                                   FROM ${this.getTableName()}
+                                   FROM ${this.tableName}
                                    order by id desc
                                    limit ?`);
 
@@ -154,7 +154,7 @@ export default class SqliteHelper implements IDBHelper {
      * Clears all active alarms.
      */
     clearAllActiveAlarms() {
-        const stmt = this.prepare(`UPDATE ${this.getTableName()}
+        const stmt = this.prepare(`UPDATE ${this.tableName}
                                    set isActive = 0,
                                        duration = strftime('%s', 'now') - ts / 1000
                                    where isActive = 1`);

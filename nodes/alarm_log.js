@@ -33,18 +33,20 @@ module.exports = function (RED) {
     const plcTagValuesState = {};
     const activeAlarms = {};
     const eventsToNotify = {};
+    const disabledEventMap = {};
+    const unacknowledgedEventMap = {};
     function AlarmLogNode(config) {
         let notificationTimeoutTime = 60 * 1000;
         let notificationTimer = null;
         let eventConfigs = [];
         let eventCount = 100;
-        const disabledEventMap = {};
-        const unacknowledgedEventMap = {};
         RED.nodes.createNode(this, config);
         const node = this;
         const dbHelper = new sqlite_helper_1.default(`./alarmNode.sqlite`, node.id);
         activeAlarms[node.id] = dbHelper.getActiveAlarms();
         eventsToNotify[node.id] = [];
+        disabledEventMap[node.id] = {};
+        unacknowledgedEventMap[node.id] = {};
         const logger = new tools_1.Logger(node, config.isDebug || config.isMochaTesting);
         const eventConfig = new tools_1.EventConfig(logger);
         if (config.configText) {
@@ -101,7 +103,7 @@ module.exports = function (RED) {
                 toAdd: []
             };
             for (const [tagName, newValue] of Object.entries(newValues)) {
-                if (disabledEventMap[tagName])
+                if (disabledEventMap[node.id][tagName])
                     continue;
                 const val = typeof newValue === "boolean" ? (newValue ? 1 : 0) : newValue;
                 if (typeof val !== "number" || !Number.isFinite(val))
@@ -117,7 +119,7 @@ module.exports = function (RED) {
             sendNodeREDMsg(alarmsOut, eventsOut);
         });
         function addEventToNotify(record) {
-            if (unacknowledgedEventMap[record.tagName])
+            if (unacknowledgedEventMap[node.id][record.tagName])
                 return;
             const startTimer = eventsToNotify[node.id].length === 0;
             if (eventsToNotify[node.id].findIndex(e => e.eventId === record.eventId) === -1)
@@ -128,7 +130,7 @@ module.exports = function (RED) {
                     if (eventsToNotify[node.id].length !== 0) {
                         node.send([null, null, null, { payload: eventsToNotify[node.id], topic: '__notifications__' }]);
                         for (const event of eventsToNotify[node.id]) {
-                            unacknowledgedEventMap[event.tagName] = true;
+                            unacknowledgedEventMap[node.id][event.tagName] = true;
                         }
                         eventsToNotify[node.id] = [];
                         node.send([null, null, null, unacknowledgedEventMapMsg()]);
@@ -313,19 +315,19 @@ module.exports = function (RED) {
                     toUpdate: []
                 };
                 for (const [tagName, enable] of Object.entries(msg.payload)) {
-                    let val = plcTagValuesState[node.id][tagName];
-                    val = typeof val === "boolean" ? (val ? 1 : 0) : val;
-                    if (typeof val !== "number" || !Number.isFinite(val))
-                        continue;
                     const eventConfig = eventConfigs.find(event => event.tagName === tagName);
                     if (!eventConfig)
                         continue;
                     if (enable) {
-                        delete disabledEventMap[tagName];
+                        delete disabledEventMap[node.id][tagName];
+                        let val = plcTagValuesState[node.id][tagName];
+                        val = typeof val === "boolean" ? (val ? 1 : 0) : val;
+                        if (typeof val !== "number" || !Number.isFinite(val))
+                            continue;
                         alarmChecker(eventConfig, val, alarmsOut, true);
                     }
                     else {
-                        disabledEventMap[tagName] = true;
+                        disabledEventMap[node.id][tagName] = true;
                         clearAlarm(eventConfig, alarmsOut);
                     }
                 }
@@ -336,8 +338,8 @@ module.exports = function (RED) {
             if (msg.topic === "__acknowledge_event__") {
                 const ackEvents = Array.isArray(msg.payload) ? msg.payload : [msg.payload];
                 for (const event of ackEvents) {
-                    if (unacknowledgedEventMap[event])
-                        unacknowledgedEventMap[event] = false;
+                    if (unacknowledgedEventMap[node.id][event])
+                        unacknowledgedEventMap[node.id][event] = false;
                 }
                 node.send([null, null, null, unacknowledgedEventMapMsg()]);
                 return true;
@@ -363,6 +365,7 @@ module.exports = function (RED) {
             }
             if (msg.topic === "__get_config__") {
                 node.send([null, null, { payload: eventConfigs, topic: msg.topic }, unacknowledgedEventMapMsg()]);
+                node.send([null, null, { payload: disabledEventMap[node.id], topic: '__disabled_events__' }]);
                 return true;
             }
             if (msg.topic === "__get_active_alarms__") {
@@ -388,7 +391,7 @@ module.exports = function (RED) {
             };
         }
         function unacknowledgedEventMapMsg() {
-            return { topic: '__unacknowledged_events__', payload: unacknowledgedEventMap };
+            return { topic: '__unacknowledged_events__', payload: unacknowledgedEventMap[node.id] };
         }
     }
     RED.nodes.registerType("cx_alarm_log", AlarmLogNode);
